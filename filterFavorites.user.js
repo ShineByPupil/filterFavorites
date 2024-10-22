@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.0.1
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -46,8 +46,19 @@
         }
 
         function hanfleFilter () {
-            [...document.querySelectorAll('.itg.gld .gl1t')].forEach(n => {
-                if (n.querySelector('.gl5t div div:last-child').title) {
+            const list = document.querySelectorAll('table.itg.gltm tr').length > 0
+                ? document.querySelectorAll('table.itg.gltm tr') // 最小化
+                : document.querySelectorAll('table.itg.gltc tr').length > 0
+                    ? document.querySelectorAll('table.itg.gltc tr') // 紧凑 + 标签
+                    : document.querySelectorAll('table.itg.glte tr').length > 0
+                        ? document.querySelectorAll('table.itg.glte tr') // 扩展
+                        : document.querySelectorAll('.itg.gld .gl1t').length > 0
+                            ? document.querySelectorAll('.itg.gld .gl1t') // 缩略图
+                            : [];
+
+            [...list].forEach(n => {
+                const find = n.querySelector('[id^="posted_"]')
+                if (find && find.title) {
                     n.style.display = isFilter ? 'none' : '';
                 }
             });
@@ -114,8 +125,9 @@
 
         const tagDom = Array.from(document.querySelectorAll('#taglist a'));
 
-        let tags = tagDom.filter(n => tagConfigMap.has(n.id.slice(3)))
-            .sort((n, m) => tagConfigMap.get(m.id.slice(3)).weight - tagConfigMap.get(n.id.slice(3)).weight)
+        const formatId = id => id.slice(3).replace(/_/g, ' ');
+        let tags = tagDom.filter(n => tagConfigMap.has(formatId(n.id)))
+            .sort((n, m) => tagConfigMap.get(formatId(m.id)).weight - tagConfigMap.get(formatId(n.id)).weight)
             .map(n => `[${n.innerText}]`)
             .join('');
 

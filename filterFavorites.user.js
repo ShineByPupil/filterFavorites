@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.0.2
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -126,10 +126,11 @@
         const tagDom = Array.from(document.querySelectorAll('#taglist a'));
 
         const formatId = id => id.slice(3).replace(/_/g, ' ');
-        let tags = tagDom.filter(n => tagConfigMap.has(formatId(n.id)))
+        let tags = [...new Set(
+            tagDom.filter(n => tagConfigMap.has(formatId(n.id)))
             .sort((n, m) => tagConfigMap.get(formatId(m.id)).weight - tagConfigMap.get(formatId(n.id)).weight)
             .map(n => `[${n.innerText}]`)
-            .join('');
+        )].join('');
 
         input.value = (title + ' ' + tags).trim();
 

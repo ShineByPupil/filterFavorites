@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.0.2
+// @version      1.0.3
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -77,9 +77,6 @@
     }
 
     async function formatFileName () {
-        const input = document.createElement('input');
-        input.style.width = '100%';
-        input.style.textAlign = 'center';
         let title = document.querySelector('#gj').innerText || document.querySelector('#gn').innerText;
 
         title = title
@@ -132,22 +129,19 @@
             .map(n => `[${n.innerText}]`)
         )].join('');
 
+        const input = document.createElement('input');
+        input.style.width = '100%';
+        input.style.textAlign = 'center';
         input.value = (title + ' ' + tags).trim();
 
-        input.addEventListener('focus', async function () {
-            // 选择输入框内容
-            input.select();
-
-            try {
-                // 将选中的内容复制到剪贴板
-                await navigator.clipboard.writeText(input.value);
-                console.log('内容已复制到剪贴板:', input.value);
-            } catch (err) {
-                console.error('复制失败:', err);
-            }
-        });
+        const button = document.createElement('button');
+        button.onclick = function () {
+            navigator.clipboard.writeText(input.value);
+        }
+        button.innerText = '复制';
 
         document.querySelector('#gd2').appendChild(input);
+        document.querySelector('#gd2').appendChild(button);
     }
 
 })();

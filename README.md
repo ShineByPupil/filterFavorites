@@ -26,4 +26,4 @@ _如果通过其他弹窗或标签页收藏画廊，搜索主页不会隐藏对�
 
 ## 安装
 
-<a href="https://greasyfork.org/zh-CN/scripts/494010">点击此处安装</a>
+<a href="https://greasyfork.org/zh-CN/scripts/513527">点击此处安装</a>

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.0.4
+// @version      1.0.5
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -24,26 +24,42 @@
 
     function filterFavorites () {
         let isFilter = localStorage.getItem('isFilter') === 'true';
+        let alwaysFilter = localStorage.getItem('alwaysFilter') || '';
 
         // 创建按钮元素
-        const button = document.createElement('button');
-        button.innerText = isFilter ? '点击显示' : '点击隐藏';
-        button.style.position = 'fixed'; // 绝对定位
-        button.style.left = '10px'; // 距离左边10像素
-        button.style.top = '10px'; // 距离顶部10像素
-        button.style.zIndex = '1000'; // 确保按钮在其他元素之上
-        button.style.padding = '10px 15px';
-        button.style.backgroundColor = '#007BFF'; // 按钮背景颜色
-        button.style.color = '#FFFFFF'; // 按钮文字颜色
-        button.style.border = 'none';
-        button.style.borderRadius = '5px';
-        button.style.cursor = 'pointer';
+        const div = document.createElement('div');
+        const btn1 = document.createElement('button');
+        const btn2 = document.createElement('button');
+
+        div.style.position = 'fixed'; // 绝对定位
+        div.style.right = '10px'; // 距离左边10像素
+        div.style.bottom = '10px'; // 距离顶部10像素
+        div.style.zIndex = '1000'; // 确保按钮在其他元素之上
+        div.style.display = 'flex';
+        div.style.flexDirection = 'column';
+
+        btn1.innerText = isFilter ? '点击显示' : '点击隐藏';
+        btn1.style.backgroundColor = '#007BFF'; // 按钮背景颜色
+        btn1.style.color = '#FFFFFF'; // 按钮文字颜色
+        btn1.style.border = 'none';
+        btn1.style.borderRadius = '5px';
+        btn1.style.cursor = 'pointer';
+        btn1.style.padding = '4px 10px';
+        btn1.style.marginBottom = '10px';
+
+        btn2.innerText = '总是过滤';
+        btn2.style.backgroundColor = '#007BFF'; // 按钮背景颜色
+        btn2.style.color = '#FFFFFF'; // 按钮文字颜色
+        btn2.style.border = 'none';
+        btn2.style.borderRadius = '5px';
+        btn2.style.cursor = 'pointer';
+        btn2.style.padding = '4px 10px';
 
         // 添加按钮到页面
-        document.body.appendChild(button);
-        if (isFilter) {
-            hanfleFilter();
-        }
+        div.appendChild(btn1);
+        div.appendChild(btn2);
+        document.body.appendChild(div);
+        hanfleFilter();
 
         function hanfleFilter () {
             const list = document.querySelectorAll('table.itg.gltm tr').length > 0
@@ -58,22 +74,37 @@
 
             [...list].forEach(n => {
                 const find = n.querySelector('[id^="posted_"]')
-                if (find && find.title) {
-                    n.style.display = isFilter ? 'none' : '';
+
+                if (find && find.title !== '') {
+                    if (alwaysFilter === find.title) {
+                        n.style.display = 'none';
+                    } else {
+                        n.style.display = isFilter ? 'none' : '';
+                    }
                 }
             });
         }
 
         // 按钮点击事件
-        button.addEventListener('click', function () {
+        btn1.addEventListener('click', function () {
             isFilter = !isFilter;
             localStorage.setItem('isFilter', isFilter);
-            button.innerText = isFilter
-                ? '点击显示'
-                : '点击隐藏';
+            btn1.innerText = isFilter ? '点击显示' : '点击隐藏';
 
             hanfleFilter();
         });
+
+        btn2.addEventListener('click', function () {
+            const  userInput  = prompt("请输入总是过滤的收藏名：", alwaysFilter);
+
+            if (userInput !==null) {
+                alwaysFilter = userInput;
+                localStorage.setItem('alwaysFilter', alwaysFilter);
+                hanfleFilter();
+            }
+
+        })
+
     }
 
     async function formatFileName () {

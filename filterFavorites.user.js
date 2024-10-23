@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.0.3
+// @version      1.0.4
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -14,7 +14,7 @@
     'use strict';
 
     // 根据 URL 执行不同的代码
-    if (window.location.pathname === '/') {
+    if (['/', '/watched', '/popular', '/favorites.php'].includes(window.location.pathname)) {
         // 主页
         filterFavorites();
     } else if (/^\/g\/\d+\/[a-z0-9]+\/$/.test(window.location.pathname)) {
@@ -77,6 +77,13 @@
     }
 
     async function formatFileName () {
+        const parenthesesRule = '\\([^(]*(' +
+            ['Vol', 'COMIC', '成年コミック'].join('|') +
+            ')[^(]*\\)'; // 圆括号
+        const squareBracketsRule = '\\[[^[]*(' +
+            ['汉化', '翻訳', 'Chinese', '無修正', 'DL版', '中国語'].join('|') +
+            ')[^[]*\\]'; // 方括号
+        const rule = new RegExp(`${parenthesesRule}|${squareBracketsRule}`, 'g');
         let title = document.querySelector('#gj').innerText || document.querySelector('#gn').innerText;
 
         title = title
@@ -89,7 +96,7 @@
                 }
             })
             .replace(/[\/\\:*?"<>|]/g, ' ')
-            .replace(/\[[^[]*(汉化|翻訳|Chinese|無修正|DL版)[^[]*\]/g, '')
+            .replace(rule, '')
             .replace(/\s+/g, ' ')
             .trim();
 

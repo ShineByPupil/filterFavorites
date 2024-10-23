@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.0.5
+// @version      1.0.6
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -59,18 +59,12 @@
         div.appendChild(btn1);
         div.appendChild(btn2);
         document.body.appendChild(div);
-        hanfleFilter();
+        handleFilter();
 
-        function hanfleFilter () {
-            const list = document.querySelectorAll('table.itg.gltm tr').length > 0
-                ? document.querySelectorAll('table.itg.gltm tr') // 最小化
-                : document.querySelectorAll('table.itg.gltc tr').length > 0
-                    ? document.querySelectorAll('table.itg.gltc tr') // 紧凑 + 标签
-                    : document.querySelectorAll('table.itg.glte tr').length > 0
-                        ? document.querySelectorAll('table.itg.glte tr') // 扩展
-                        : document.querySelectorAll('.itg.gld .gl1t').length > 0
-                            ? document.querySelectorAll('.itg.gld .gl1t') // 缩略图
-                            : [];
+        function handleFilter () {
+            const list = document.querySelector('table.itg')
+                ? document.querySelectorAll('table.itg tr')
+                : document.querySelectorAll('.itg.gld .gl1t');
 
             [...list].forEach(n => {
                 const find = n.querySelector('[id^="posted_"]')
@@ -85,13 +79,30 @@
             });
         }
 
+        const observer = new MutationObserver(mutationsList => {
+            const domSet = new WeakSet();
+
+            for (let mutation of mutationsList) {
+                if (/^posted_\d+$/.test(mutation.target.id) && !domSet.has(mutation.target)) {
+                    domSet.add(mutation.target);
+                    handleFilter();
+                }
+            }
+        })
+
+        // 开始观察目标节点
+        observer.observe(document.querySelector('.itg'),  {
+            attributes: true,
+            subtree: true
+        });
+
         // 按钮点击事件
         btn1.addEventListener('click', function () {
             isFilter = !isFilter;
             localStorage.setItem('isFilter', isFilter);
             btn1.innerText = isFilter ? '点击显示' : '点击隐藏';
 
-            hanfleFilter();
+            handleFilter();
         });
 
         btn2.addEventListener('click', function () {
@@ -100,7 +111,7 @@
             if (userInput !==null) {
                 alwaysFilter = userInput;
                 localStorage.setItem('alwaysFilter', alwaysFilter);
-                hanfleFilter();
+                handleFilter();
             }
 
         })

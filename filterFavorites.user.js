@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.0.6
+// @version      1.0.7
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -12,6 +12,14 @@
 
 (function () {
     'use strict';
+
+    // 【文件名去除规则】
+    const parenthesesRule = '\\([^(]*(' +
+        ['Vol', 'COMIC', '成年コミック', 'C\\d+', 'よろず'].join('|') +
+        ')[^(]*\\)'; // 圆括号
+    const squareBracketsRule = '\\[[^[]*(' +
+        ['汉化', '翻訳', 'Chinese', '無修正', 'DL版', '中国語'].join('|') +
+        ')[^[]*\\]'; // 方括号
 
     // 根据 URL 执行不同的代码
     if (['/', '/watched', '/popular', '/favorites.php'].includes(window.location.pathname)) {
@@ -28,6 +36,7 @@
 
         // 创建按钮元素
         const div = document.createElement('div');
+        const refresh = document.createElement('button');
         const btn1 = document.createElement('button');
         const btn2 = document.createElement('button');
 
@@ -38,6 +47,18 @@
         div.style.display = 'flex';
         div.style.flexDirection = 'column';
 
+        refresh.innerText = '↻刷新';
+        refresh.style.backgroundColor = '#007BFF'; // 按钮背景颜色
+        refresh.style.color = '#FFFFFF'; // 按钮文字颜色
+        refresh.style.border = 'none';
+        refresh.style.borderRadius = '5px';
+        refresh.style.cursor = 'pointer';
+        refresh.style.padding = '4px 10px';
+        refresh.style.marginBottom = '10px';
+        refresh.addEventListener('click', function () {
+            location.reload();
+        });
+
         btn1.innerText = isFilter ? '点击显示' : '点击隐藏';
         btn1.style.backgroundColor = '#007BFF'; // 按钮背景颜色
         btn1.style.color = '#FFFFFF'; // 按钮文字颜色
@@ -46,6 +67,14 @@
         btn1.style.cursor = 'pointer';
         btn1.style.padding = '4px 10px';
         btn1.style.marginBottom = '10px';
+        btn1.addEventListener('click', function () {
+            isFilter = !isFilter;
+            localStorage.setItem('isFilter', isFilter);
+            btn1.innerText = isFilter ? '点击显示' : '点击隐藏';
+
+            handleFilter();
+        });
+
 
         btn2.innerText = '总是过滤';
         btn2.style.backgroundColor = '#007BFF'; // 按钮背景颜色
@@ -54,8 +83,19 @@
         btn2.style.borderRadius = '5px';
         btn2.style.cursor = 'pointer';
         btn2.style.padding = '4px 10px';
+        btn2.addEventListener('click', function () {
+            const  userInput  = prompt("请输入总是过滤的收藏名：", alwaysFilter);
+
+            if (userInput !==null) {
+                alwaysFilter = userInput;
+                localStorage.setItem('alwaysFilter', alwaysFilter);
+                handleFilter();
+            }
+
+        })
 
         // 添加按钮到页面
+        div.appendChild(refresh);
         div.appendChild(btn1);
         div.appendChild(btn2);
         document.body.appendChild(div);
@@ -95,37 +135,10 @@
             attributes: true,
             subtree: true
         });
-
-        // 按钮点击事件
-        btn1.addEventListener('click', function () {
-            isFilter = !isFilter;
-            localStorage.setItem('isFilter', isFilter);
-            btn1.innerText = isFilter ? '点击显示' : '点击隐藏';
-
-            handleFilter();
-        });
-
-        btn2.addEventListener('click', function () {
-            const  userInput  = prompt("请输入总是过滤的收藏名：", alwaysFilter);
-
-            if (userInput !==null) {
-                alwaysFilter = userInput;
-                localStorage.setItem('alwaysFilter', alwaysFilter);
-                handleFilter();
-            }
-
-        })
-
     }
 
     async function formatFileName () {
-        const parenthesesRule = '\\([^(]*(' +
-            ['Vol', 'COMIC', '成年コミック'].join('|') +
-            ')[^(]*\\)'; // 圆括号
-        const squareBracketsRule = '\\[[^[]*(' +
-            ['汉化', '翻訳', 'Chinese', '無修正', 'DL版', '中国語'].join('|') +
-            ')[^[]*\\]'; // 方括号
-        const rule = new RegExp(`${parenthesesRule}|${squareBracketsRule}`, 'g');
+               const rule = new RegExp(`${parenthesesRule}|${squareBracketsRule}`, 'g');
         let title = document.querySelector('#gj').innerText || document.querySelector('#gn').innerText;
 
         title = title

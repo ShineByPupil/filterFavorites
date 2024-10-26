@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.1.2
+// @version      1.1.3
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -68,6 +68,7 @@
     } else if (/^\/g\/\d+\/[a-z0-9]+\/$/.test(window.location.pathname)) {
         // 详情页
         formatFileName();
+        setFavorites();
     }
 
     // 过滤收藏
@@ -308,33 +309,56 @@
         ulNode.appendChild(refreshLi);
         document.body.appendChild(ulNode);
 
+        // 搜索主页
         const itgNode = document.querySelector('.itg');
-        itgNode.addEventListener('mouseover', function (event) {
-            const { target } = event;
+        if (itgNode) {
+            itgNode.addEventListener('mouseover', function (event) {
+                const { target } = event;
 
-            if (target.tagName === 'IMG' && target.alt !== 'T') {
-                const href = target.parentNode.href;
-                const groups = href.split('/');
+                if (target.tagName === 'IMG' && target.alt !== 'T') {
+                    const href = target.parentNode.href;
+                    const groups = href.split('/');
 
-                gid = groups[groups.length - 3];
-                t = groups[groups.length - 2];
+                    gid = groups[groups.length - 3];
+                    t = groups[groups.length - 2];
 
-                const rect = target.parentNode.parentNode.getBoundingClientRect();
+                    const rect = target.parentNode.parentNode.getBoundingClientRect();
+                    ulNode.style.display = 'flex'
+                    ulNode.style.left = `${rect.left + 10 + window.scrollX}px`;
+                    ulNode.style.top = `${rect.top + 10 + window.scrollY}px`; // 在 li 下方显示
+                }
+            });
+            itgNode.addEventListener('mouseout', function (e) {
+                const { target } = e;
+
+                if (target.tagName === 'IMG' && !ulNode.matches(':hover')) {
+                    gid = null;
+                    t = null;
+
+                    ulNode.style.display = 'none';
+                }
+            });
+        }
+
+        // 详情页
+        const cover = document.querySelector('#gd1 div');
+        if (cover) {
+            const groups = location.pathname.split('/');
+            gid = groups[groups.length - 3];
+            t = groups[groups.length - 2];
+
+            cover.addEventListener('mouseover', function (event) {
+                const rect = event.target.getBoundingClientRect();
                 ulNode.style.display = 'flex'
                 ulNode.style.left = `${rect.left + 10 + window.scrollX}px`;
                 ulNode.style.top = `${rect.top + 10 + window.scrollY}px`; // 在 li 下方显示
-            }
-        });
-        itgNode.addEventListener('mouseout', function (e) {
-            const { target } = e;
-
-            if (target.tagName === 'IMG' && !ulNode.matches(':hover')) {
-                gid = null;
-                t = null;
-
-                ulNode.style.display = 'none'
-            }
-        });
+            });
+            cover.addEventListener('mouseout', function (event) {
+                if (!ulNode.matches(':hover')) {
+                    ulNode.style.display = 'none';
+                }
+            });
+        }
 
         async function createFavoriteLi(disableCache = false) {
             const fragment = document.createDocumentFragment();

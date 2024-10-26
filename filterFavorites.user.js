@@ -113,7 +113,7 @@
     }
 
     // 过滤收藏
-    function filterFavorites () {
+    function filterFavorites() {
         const div = document.createElement('div');
         const refreshBtn = document.createElement('button');
         refreshBtn.innerText = '↻刷新';
@@ -132,9 +132,9 @@
         const filterBtn = document.createElement('button');
         filterBtn.innerText = '总是过滤';
         filterBtn.addEventListener('click', function () {
-            const  userInput  = prompt("请输入总是过滤的收藏名：", alwaysFilter);
+            const userInput = prompt("请输入总是过滤的收藏名：", alwaysFilter);
 
-            if (userInput !==null) {
+            if (userInput !== null) {
                 alwaysFilter = userInput;
                 localStorage.setItem('alwaysFilter', alwaysFilter);
                 handleFilter();
@@ -160,10 +160,10 @@
             marginBottom: '10px',
         };
 
-        for(let key in divStyle) {
+        for (let key in divStyle) {
             div.style[key] = divStyle[key];
         }
-        for(let key in btnStyle) {
+        for (let key in btnStyle) {
             refreshBtn.style[key] = btnStyle[key];
             toggleBtn.style[key] = btnStyle[key];
             filterBtn.style[key] = btnStyle[key];
@@ -190,7 +190,7 @@
         // 开始观察目标节点
         const targetNode = document.querySelector('.itg');
         if (targetNode) {
-            observer.observe(targetNode,  {
+            observer.observe(targetNode, {
                 attributes: true,
                 subtree: true
             });
@@ -198,7 +198,7 @@
     }
 
     // 开始过滤
-    function handleFilter () {
+    function handleFilter() {
         const list = document.querySelector('table.itg')
             ? document.querySelectorAll('table.itg tr')
             : document.querySelectorAll('.itg.gld .gl1t');
@@ -217,7 +217,7 @@
     }
 
     // 生成文件名成
-    async function formatFileName () {
+    async function formatFileName() {
         const rule = new RegExp(`${parenthesesRule}|${squareBracketsRule}`, 'g');
         let title = document.querySelector('#gj').innerText || document.querySelector('#gn').innerText;
 
@@ -266,8 +266,8 @@
         const formatId = id => id.slice(3).replace(/_/g, ' ');
         let tags = [...new Set(
             tagDom.filter(n => tagConfigMap.has(formatId(n.id)))
-            .sort((n, m) => tagConfigMap.get(formatId(m.id)).weight - tagConfigMap.get(formatId(n.id)).weight)
-            .map(n => `[${n.innerText}]`)
+                .sort((n, m) => tagConfigMap.get(formatId(m.id)).weight - tagConfigMap.get(formatId(n.id)).weight)
+                .map(n => `[${n.innerText}]`)
         )].join('');
 
         const input = document.createElement('input');
@@ -314,10 +314,10 @@
         const refreshLi = utils.createNode(`<li>↻刷新</li>`);
         const favoriteLi = await createFavoriteLi();
 
-        for(let key in ulStyle) {
+        for (let key in ulStyle) {
             ulNode.style[key] = ulStyle[key];
         }
-        for(let key in liStyle) {
+        for (let key in liStyle) {
             favdelLi.style[key] = liStyle[key];
             refreshLi.style[key] = liStyle[key];
         }
@@ -354,7 +354,7 @@
         const itgNode = document.querySelector('.itg');
         if (itgNode) {
             itgNode.addEventListener('mouseover', function (event) {
-                const { target } = event;
+                const {target} = event;
 
                 if (target.tagName === 'IMG' && target.alt !== 'T') {
                     const href = target.parentNode.href;
@@ -370,7 +370,7 @@
                 }
             });
             itgNode.addEventListener('mouseout', function (e) {
-                const { target } = e;
+                const {target} = e;
 
                 if (target.tagName === 'IMG' && !ulNode.matches(':hover')) {
                     gid = null;
@@ -414,7 +414,7 @@
                         }
                     })
 
-                    for(let key in liStyle) {
+                    for (let key in liStyle) {
                         liNode.style[key] = liStyle[key];
                     }
 
@@ -460,7 +460,7 @@
 
         const response = await fetch(
             `https://exhentai.org/gallerypopups.php?gid=${gid}&t=${t}&act=addfav`,
-            { method: 'POST', body: formData });
+            {method: 'POST', body: formData});
 
         const domStr = await response.text();
         const parser = new DOMParser();
@@ -469,7 +469,7 @@
             .find(n => n.textContent.includes('window.close()'));
 
         if (script) {
-            let codeStr =  script.textContent
+            let codeStr = script.textContent
             codeStr = codeStr.replace(/window.opener.document/g, 'window.document');
             codeStr = codeStr.replace(/window.close\(\);/g, '');
 

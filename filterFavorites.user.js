@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.1.0
+// @version      1.1.1
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -73,54 +73,23 @@
     // 过滤收藏
     function filterFavorites () {
         const div = document.createElement('div');
-        const refresh = document.createElement('button');
-        const btn1 = document.createElement('button');
-        const btn2 = document.createElement('button');
-
-        div.style.position = 'fixed'; // 绝对定位
-        div.style.right = '10px'; // 距离左边10像素
-        div.style.bottom = '10px'; // 距离顶部10像素
-        div.style.zIndex = '1000'; // 确保按钮在其他元素之上
-        div.style.display = 'flex';
-        div.style.flexDirection = 'column';
-
-        refresh.innerText = '↻刷新';
-        refresh.style.backgroundColor = '#007BFF'; // 按钮背景颜色
-        refresh.style.color = '#FFFFFF'; // 按钮文字颜色
-        refresh.style.border = 'none';
-        refresh.style.borderRadius = '5px';
-        refresh.style.cursor = 'pointer';
-        refresh.style.padding = '4px 10px';
-        refresh.style.marginBottom = '10px';
-        refresh.addEventListener('click', function () {
+        const refreshBtn = document.createElement('button');
+        refreshBtn.innerText = '↻刷新';
+        refreshBtn.addEventListener('click', function () {
             location.reload();
         });
-
-        btn1.innerText = isFilter ? '点击显示' : '点击隐藏';
-        btn1.style.backgroundColor = '#007BFF'; // 按钮背景颜色
-        btn1.style.color = '#FFFFFF'; // 按钮文字颜色
-        btn1.style.border = 'none';
-        btn1.style.borderRadius = '5px';
-        btn1.style.cursor = 'pointer';
-        btn1.style.padding = '4px 10px';
-        btn1.style.marginBottom = '10px';
-        btn1.addEventListener('click', function () {
+        const toggleBtn = document.createElement('button');
+        toggleBtn.innerText = isFilter ? '点击显示' : '点击隐藏';
+        toggleBtn.addEventListener('click', function () {
             isFilter = !isFilter;
             localStorage.setItem('isFilter', isFilter);
-            btn1.innerText = isFilter ? '点击显示' : '点击隐藏';
+            toggleBtn.innerText = isFilter ? '点击显示' : '点击隐藏';
 
             handleFilter();
         });
-
-
-        btn2.innerText = '总是过滤';
-        btn2.style.backgroundColor = '#007BFF'; // 按钮背景颜色
-        btn2.style.color = '#FFFFFF'; // 按钮文字颜色
-        btn2.style.border = 'none';
-        btn2.style.borderRadius = '5px';
-        btn2.style.cursor = 'pointer';
-        btn2.style.padding = '4px 10px';
-        btn2.addEventListener('click', function () {
+        const filterBtn = document.createElement('button');
+        filterBtn.innerText = '总是过滤';
+        filterBtn.addEventListener('click', function () {
             const  userInput  = prompt("请输入总是过滤的收藏名：", alwaysFilter);
 
             if (userInput !==null) {
@@ -131,10 +100,37 @@
 
         })
 
+        const divStyle = {
+            position: 'fixed', // 绝对定位
+            right: '10px', // 距离左边10像素
+            bottom: '10px', // 距离顶部10像素
+            zIndex: '1000', // 确保按钮在其他元素之上
+            display: 'flex',
+            flexDirection: 'column',
+        }
+        const btnStyle = {
+            backgroundColor: '#007BFF', // 按钮背景颜色
+            color: '#FFFFFF', // 按钮文字颜色
+            border: 'none',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            padding: '4px 10px',
+            marginBottom: '10px',
+        };
+
+        for(let key in divStyle) {
+            div.style[key] = divStyle[key];
+        }
+        for(let key in btnStyle) {
+            refreshBtn.style[key] = btnStyle[key];
+            toggleBtn.style[key] = btnStyle[key];
+            filterBtn.style[key] = btnStyle[key];
+        }
+
         // 添加按钮到页面
-        div.appendChild(refresh);
-        div.appendChild(btn1);
-        div.appendChild(btn2);
+        div.appendChild(refreshBtn);
+        div.appendChild(toggleBtn);
+        div.appendChild(filterBtn);
         document.body.appendChild(div);
         handleFilter();
 
@@ -288,7 +284,7 @@
                 const liNode = utils.createNode(`<li>${n}</li>`);
                 liNode.addEventListener('click', function () {
                     if (gid && t) {
-                        updateFavorites(index)
+                        updateFavorites(index, gid, t)
                     }
                 })
 
@@ -305,7 +301,7 @@
         }
         liNode.addEventListener('click', function () {
             if (gid && t) {
-                updateFavorites('favdel')
+                updateFavorites('favdel', gid, t);
             }
         })
         ulNode.appendChild(liNode);
@@ -315,7 +311,7 @@
         itgNode.addEventListener('mouseover', function (event) {
             const { target } = event;
 
-            if (target.tagName === 'IMG') {
+            if (target.tagName === 'IMG' && target.alt !== 'T') {
                 const href = target.parentNode.href;
                 const groups = href.split('/');
 
@@ -338,61 +334,60 @@
                 ulNode.style.display = 'none'
             }
         })
+    }
 
-        // 获取收藏配置列表
-        async function getFavorites(disableCache = false) {
-            let favoriteList = localStorage.getItem('favoriteList');
+    // 获取收藏配置列表
+    async function getFavorites(disableCache = false) {
+        let favoriteList = localStorage.getItem('favoriteList');
 
-            if (favoriteList && disableCache === false) {
-                return JSON.parse(favoriteList);
-            } else {
-                const response = await fetch('https://exhentai.org/uconfig.php');
-                const domStr = await response.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(domStr, 'text/html');
-
-                const list = Array.from(
-                    doc.querySelectorAll('#favsel input')
-                ).map(n => n.value);
-
-                if (list.length) {
-                    localStorage.setItem('favoriteList', JSON.stringify(list));
-                    return list;
-                } else {
-                    throw new Error(doc.body.innerText)
-                }
-            }
-        }
-
-        async function updateFavorites(type) {
-            const formData = new FormData();
-            formData.append('favcat', type);
-            formData.append('favnote', '');
-            formData.append('update', '1');
-
-            const response = await fetch(
-                `https://exhentai.org/gallerypopups.php?gid=${gid}&t=${t}&act=addfav`,
-                { method: 'POST', body: formData });
-
+        if (favoriteList && disableCache === false) {
+            return JSON.parse(favoriteList);
+        } else {
+            const response = await fetch('https://exhentai.org/uconfig.php');
             const domStr = await response.text();
             const parser = new DOMParser();
             const doc = parser.parseFromString(domStr, 'text/html');
-            const script = Array.from(doc.querySelectorAll('script'))
-                .find(n => n.textContent.includes('window.close()'));
 
-            if (script) {
-                let codeStr =  script.textContent
-                codeStr = codeStr.replace(/window.opener.document/g, 'window.document');
-                codeStr = codeStr.replace(/window.close\(\);/g, '');
+            const list = Array.from(
+                doc.querySelectorAll('#favsel input')
+            ).map(n => n.value);
 
-
-                const dynamicFunction = new Function(codeStr);
-                dynamicFunction();
-                handleFilter();
-                utils.showMessage('收藏成功');
+            if (list.length) {
+                localStorage.setItem('favoriteList', JSON.stringify(list));
+                return list;
+            } else {
+                throw new Error(doc.body.innerText)
             }
         }
     }
 
+    // 更新收藏设置
+    async function updateFavorites(type, gid, t) {
+        const formData = new FormData();
+        formData.append('favcat', type);
+        formData.append('favnote', '');
+        formData.append('update', '1');
 
+        const response = await fetch(
+            `https://exhentai.org/gallerypopups.php?gid=${gid}&t=${t}&act=addfav`,
+            { method: 'POST', body: formData });
+
+        const domStr = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(domStr, 'text/html');
+        const script = Array.from(doc.querySelectorAll('script'))
+            .find(n => n.textContent.includes('window.close()'));
+
+        if (script) {
+            let codeStr =  script.textContent
+            codeStr = codeStr.replace(/window.opener.document/g, 'window.document');
+            codeStr = codeStr.replace(/window.close\(\);/g, '');
+
+
+            const dynamicFunction = new Function(codeStr);
+            dynamicFunction();
+            handleFilter();
+            utils.showMessage('收藏成功');
+        }
+    }
 })();

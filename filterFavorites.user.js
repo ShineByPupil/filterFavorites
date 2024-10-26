@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.1.3
+// @version      1.1.4
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -34,11 +34,10 @@
          */
         showMessage: function (message, duration = 2500) {
             if (!this.messageBox) {
-                this.messageBox = this.createNode(
-                    `<div id="messageBox" class="c-message"></div>`
-                );
-                document.body.appendChild(this.messageBox);
+                // 创建一个 Shadow Root
+                this.createShadowMessageBox();
             }
+
             this.messageBox.textContent = message;
             this.messageBox.style.display = 'block'; // 显示消息
 
@@ -57,6 +56,48 @@
             const div = document.createElement('div');
             div.innerHTML = template.trim();
             return div.firstChild;
+        },
+        /**
+         * 创建一个带有 Shadow DOM 的消息框。
+         *
+         * @return {void}
+         */
+        createShadowMessageBox: function () {
+            const container = document.createElement('div');
+            const shadowRoot = container.attachShadow({mode: 'open'});
+
+            // 创建消息框的样式
+            const style = document.createElement('style');
+            style.textContent = `
+                #messageBox {
+                    position: fixed;
+                    top: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background-color: rgba(0, 0, 0, 0.8);
+                    color: white;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    z-index: 1000;
+                    display: none; /* 初始隐藏 */
+                    transition: opacity 0.3s ease;
+                    opacity: 1;
+                }
+            `;
+
+            // 创建消息框节点
+            const messageBox = document.createElement('div');
+            messageBox.id = 'messageBox';
+
+            // 将样式和消息框添加到 Shadow DOM
+            shadowRoot.appendChild(style);
+            shadowRoot.appendChild(messageBox);
+
+            // 将包含 Shadow DOM 的容器添加到文档中
+            document.body.appendChild(container);
+
+            // 保存对消息框的引用
+            this.messageBox = messageBox;
         },
     };
 

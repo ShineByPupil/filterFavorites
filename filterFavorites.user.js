@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.0.7
+// @version      1.1.0
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -15,26 +15,63 @@
 
     // 【文件名去除规则】
     const parenthesesRule = '\\([^(]*(' +
-        ['Vol', 'COMIC', '成年コミック', 'C\\d+', 'よろず'].join('|') +
+        ['Vol', 'COMIC', '成年コミック', 'C\\d+', 'よろず', 'FF\\d+', '\\d{4}年\\d{1,2}月'].join('|') +
         ')[^(]*\\)'; // 圆括号
     const squareBracketsRule = '\\[[^[]*(' +
         ['汉化', '翻訳', 'Chinese', '無修正', 'DL版', '中国語'].join('|') +
         ')[^[]*\\]'; // 方括号
+    let isFilter = localStorage.getItem('isFilter') === 'true';
+    let alwaysFilter = localStorage.getItem('alwaysFilter') || '';
+
+    const utils = {
+        messageBox: null,
+        /**
+         * 在屏幕上显示指定时间长度的消息。
+         *
+         * @param {string} message - 要显示的消息。
+         * @param {number} [duration=2500] - 消息应显示的毫秒数。默认为2500毫秒。
+         * @return {void} 此函数不返回值。
+         */
+        showMessage: function (message, duration = 2500) {
+            if (!this.messageBox) {
+                this.messageBox = this.createNode(
+                    `<div id="messageBox" class="c-message"></div>`
+                );
+                document.body.appendChild(this.messageBox);
+            }
+            this.messageBox.textContent = message;
+            this.messageBox.style.display = 'block'; // 显示消息
+
+            // 设置一定时间后自动隐藏消息
+            setTimeout(() => {
+                this.messageBox.style.display = 'none';
+            }, duration);
+        },
+        /**
+         * 从提供的模板字符串创建一个新的 DOM 节点。
+         *
+         * @param {string} template - 要创建节点的 HTML 模板字符串。
+         * @return {Node} 新创建的 DOM 节点。
+         */
+        createNode: function (template) {
+            const div = document.createElement('div');
+            div.innerHTML = template.trim();
+            return div.firstChild;
+        },
+    };
 
     // 根据 URL 执行不同的代码
     if (['/', '/watched', '/popular', '/favorites.php'].includes(window.location.pathname)) {
         // 主页
         filterFavorites();
+        setFavorites();
     } else if (/^\/g\/\d+\/[a-z0-9]+\/$/.test(window.location.pathname)) {
         // 详情页
         formatFileName();
     }
 
+    // 过滤收藏
     function filterFavorites () {
-        let isFilter = localStorage.getItem('isFilter') === 'true';
-        let alwaysFilter = localStorage.getItem('alwaysFilter') || '';
-
-        // 创建按钮元素
         const div = document.createElement('div');
         const refresh = document.createElement('button');
         const btn1 = document.createElement('button');
@@ -101,24 +138,6 @@
         document.body.appendChild(div);
         handleFilter();
 
-        function handleFilter () {
-            const list = document.querySelector('table.itg')
-                ? document.querySelectorAll('table.itg tr')
-                : document.querySelectorAll('.itg.gld .gl1t');
-
-            [...list].forEach(n => {
-                const find = n.querySelector('[id^="posted_"]')
-
-                if (find && find.title !== '') {
-                    if (alwaysFilter === find.title) {
-                        n.style.display = 'none';
-                    } else {
-                        n.style.display = isFilter ? 'none' : '';
-                    }
-                }
-            });
-        }
-
         const observer = new MutationObserver(mutationsList => {
             const domSet = new WeakSet();
 
@@ -131,19 +150,41 @@
         })
 
         // 开始观察目标节点
-        observer.observe(document.querySelector('.itg'),  {
-            attributes: true,
-            subtree: true
+        const targetNode = document.querySelector('.itg');
+        if (targetNode) {
+            observer.observe(targetNode,  {
+                attributes: true,
+                subtree: true
+            });
+        }
+    }
+
+    // 开始过滤
+    function handleFilter () {
+        const list = document.querySelector('table.itg')
+            ? document.querySelectorAll('table.itg tr')
+            : document.querySelectorAll('.itg.gld .gl1t');
+
+        [...list].forEach(n => {
+            const find = n.querySelector('[id^="posted_"]')
+
+            if (find && find.title !== '') {
+                if (alwaysFilter === find.title && location.pathname !== '/favorites.php') {
+                    n.style.display = 'none';
+                } else {
+                    n.style.display = isFilter ? 'none' : '';
+                }
+            }
         });
     }
 
+    // 生成文件名成
     async function formatFileName () {
-               const rule = new RegExp(`${parenthesesRule}|${squareBracketsRule}`, 'g');
+        const rule = new RegExp(`${parenthesesRule}|${squareBracketsRule}`, 'g');
         let title = document.querySelector('#gj').innerText || document.querySelector('#gn').innerText;
 
         title = title
             .replace(/[［］]/g, match => {
-                console.log('1:', match);
                 if (match === '［') {
                     return '[';
                 } else if (match === '］') {
@@ -205,5 +246,153 @@
         document.querySelector('#gd2').appendChild(input);
         document.querySelector('#gd2').appendChild(button);
     }
+
+    // 设置收藏
+    async function setFavorites() {
+        let gid = null;
+        let t = null;
+
+        const ulNode = utils.createNode(`<ul></ul>`);
+        ulNode.addEventListener('mouseover', function () {
+            ulNode.style.display = 'flex';
+        })
+        ulNode.addEventListener('mouseout', function () {
+            ulNode.style.display = 'none';
+        });
+
+        const ulStyle = {
+            margin: '0',
+            padding: '0',
+            display: 'none',
+            flexDirection: 'column',
+            position: 'absolute',
+            zIndex: '1000',
+        }
+        for(let key in ulStyle) {
+            ulNode.style[key] = ulStyle[key];
+        }
+
+        const favoriteList = await getFavorites();
+        const liStyle = {
+            listStyleType: 'none',
+            backgroundColor: '#007BFF',
+            color: '#FFFFFF',
+            cursor: 'pointer',
+            padding: '2px 4px',
+            margin: '2px 0',
+            borderRadius: '5px',
+            textAlign: 'center',
+        }
+        favoriteList.forEach((n, index) => {
+            if (!/^Favorites \d$/.test(n)) {
+                const liNode = utils.createNode(`<li>${n}</li>`);
+                liNode.addEventListener('click', function () {
+                    if (gid && t) {
+                        updateFavorites(index)
+                    }
+                })
+
+                for(let key in liStyle) {
+                    liNode.style[key] = liStyle[key];
+                }
+
+                ulNode.appendChild(liNode);
+            }
+        });
+        const liNode = utils.createNode(`<li>取消收藏</li>`);
+        for(let key in liStyle) {
+            liNode.style[key] = liStyle[key];
+        }
+        liNode.addEventListener('click', function () {
+            if (gid && t) {
+                updateFavorites('favdel')
+            }
+        })
+        ulNode.appendChild(liNode);
+        document.body.appendChild(ulNode);
+
+        const itgNode = document.querySelector('.itg');
+        itgNode.addEventListener('mouseover', function (event) {
+            const { target } = event;
+
+            if (target.tagName === 'IMG') {
+                const href = target.parentNode.href;
+                const groups = href.split('/');
+
+                gid = groups[groups.length - 3];
+                t = groups[groups.length - 2];
+
+                const rect = target.getBoundingClientRect();
+                ulNode.style.display = 'flex'
+                ulNode.style.left = `${rect.left + 10 + window.scrollX}px`;
+                ulNode.style.top = `${rect.top + 10 + window.scrollY}px`; // 在 li 下方显示
+            }
+        });
+        itgNode.addEventListener('mouseout', function (e) {
+            const { target } = e;
+
+            if (target.tagName === 'IMG' && !ulNode.matches(':hover')) {
+                gid = null;
+                t = null;
+
+                ulNode.style.display = 'none'
+            }
+        })
+
+        // 获取收藏配置列表
+        async function getFavorites(disableCache = false) {
+            let favoriteList = localStorage.getItem('favoriteList');
+
+            if (favoriteList && disableCache === false) {
+                return JSON.parse(favoriteList);
+            } else {
+                const response = await fetch('https://exhentai.org/uconfig.php');
+                const domStr = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(domStr, 'text/html');
+
+                const list = Array.from(
+                    doc.querySelectorAll('#favsel input')
+                ).map(n => n.value);
+
+                if (list.length) {
+                    localStorage.setItem('favoriteList', JSON.stringify(list));
+                    return list;
+                } else {
+                    throw new Error(doc.body.innerText)
+                }
+            }
+        }
+
+        async function updateFavorites(type) {
+            const formData = new FormData();
+            formData.append('favcat', type);
+            formData.append('favnote', '');
+            formData.append('update', '1');
+
+            const response = await fetch(
+                `https://exhentai.org/gallerypopups.php?gid=${gid}&t=${t}&act=addfav`,
+                { method: 'POST', body: formData });
+
+            const domStr = await response.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(domStr, 'text/html');
+            const script = Array.from(doc.querySelectorAll('script'))
+                .find(n => n.textContent.includes('window.close()'));
+
+            if (script) {
+                let codeStr =  script.textContent
+                codeStr = codeStr.replace(/window.opener.document/g, 'window.document');
+                codeStr = codeStr.replace(/window.close\(\);/g, '');
+
+
+                const dynamicFunction = new Function(codeStr);
+                dynamicFunction();
+                handleFilter();
+                utils.showMessage('收藏成功');
+            }
+        }
+    }
+
 
 })();

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.1.1
+// @version      1.1.2
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -245,17 +245,6 @@
 
     // 设置收藏
     async function setFavorites() {
-        let gid = null;
-        let t = null;
-
-        const ulNode = utils.createNode(`<ul></ul>`);
-        ulNode.addEventListener('mouseover', function () {
-            ulNode.style.display = 'flex';
-        })
-        ulNode.addEventListener('mouseout', function () {
-            ulNode.style.display = 'none';
-        });
-
         const ulStyle = {
             margin: '0',
             padding: '0',
@@ -264,11 +253,6 @@
             position: 'absolute',
             zIndex: '1000',
         }
-        for(let key in ulStyle) {
-            ulNode.style[key] = ulStyle[key];
-        }
-
-        const favoriteList = await getFavorites();
         const liStyle = {
             listStyleType: 'none',
             backgroundColor: '#007BFF',
@@ -279,32 +263,49 @@
             borderRadius: '5px',
             textAlign: 'center',
         }
-        favoriteList.forEach((n, index) => {
-            if (!/^Favorites \d$/.test(n)) {
-                const liNode = utils.createNode(`<li>${n}</li>`);
-                liNode.addEventListener('click', function () {
-                    if (gid && t) {
-                        updateFavorites(index, gid, t)
-                    }
-                })
 
-                for(let key in liStyle) {
-                    liNode.style[key] = liStyle[key];
-                }
+        let gid = null;
+        let t = null;
 
-                ulNode.appendChild(liNode);
-            }
-        });
-        const liNode = utils.createNode(`<li>取消收藏</li>`);
-        for(let key in liStyle) {
-            liNode.style[key] = liStyle[key];
+        const ulNode = utils.createNode(`<ul></ul>`);
+        const favdelLi = utils.createNode(`<li>取消收藏</li>`);
+        const refreshLi = utils.createNode(`<li>↻刷新</li>`);
+        const favoriteLi = await createFavoriteLi();
+
+        for(let key in ulStyle) {
+            ulNode.style[key] = ulStyle[key];
         }
-        liNode.addEventListener('click', function () {
+        for(let key in liStyle) {
+            favdelLi.style[key] = liStyle[key];
+            refreshLi.style[key] = liStyle[key];
+        }
+
+        ulNode.addEventListener('mouseover', function () {
+            ulNode.style.display = 'flex';
+        })
+        ulNode.addEventListener('mouseout', function () {
+            ulNode.style.display = 'none';
+        });
+        favdelLi.addEventListener('click', function () {
             if (gid && t) {
                 updateFavorites('favdel', gid, t);
             }
-        })
-        ulNode.appendChild(liNode);
+        });
+        refreshLi.addEventListener('click', async function () {
+            ulNode.style.display = 'none';
+            const favoriteLi = await createFavoriteLi(true);
+
+            while (ulNode.children.length > 2) {
+                ulNode.removeChild(ulNode.firstChild);
+            }
+
+            ulNode.insertBefore(favoriteLi, ulNode.firstChild);
+            ulNode.style.display = 'flex';
+        });
+
+        ulNode.appendChild(favoriteLi);
+        ulNode.appendChild(favdelLi);
+        ulNode.appendChild(refreshLi);
         document.body.appendChild(ulNode);
 
         const itgNode = document.querySelector('.itg');
@@ -318,7 +319,7 @@
                 gid = groups[groups.length - 3];
                 t = groups[groups.length - 2];
 
-                const rect = target.getBoundingClientRect();
+                const rect = target.parentNode.parentNode.getBoundingClientRect();
                 ulNode.style.display = 'flex'
                 ulNode.style.left = `${rect.left + 10 + window.scrollX}px`;
                 ulNode.style.top = `${rect.top + 10 + window.scrollY}px`; // 在 li 下方显示
@@ -333,7 +334,31 @@
 
                 ulNode.style.display = 'none'
             }
-        })
+        });
+
+        async function createFavoriteLi(disableCache = false) {
+            const fragment = document.createDocumentFragment();
+            const favoriteList = await getFavorites(disableCache);
+
+            favoriteList.forEach((n, index) => {
+                if (!/^Favorites \d$/.test(n)) {
+                    const liNode = utils.createNode(`<li>${n}</li>`);
+                    liNode.addEventListener('click', function () {
+                        if (gid && t) {
+                            updateFavorites(index, gid, t)
+                        }
+                    })
+
+                    for(let key in liStyle) {
+                        liNode.style[key] = liStyle[key];
+                    }
+
+                    fragment.appendChild(liNode);
+                }
+            });
+
+            return fragment;
+        }
     }
 
     // 获取收藏配置列表

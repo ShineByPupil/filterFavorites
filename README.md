@@ -2,9 +2,9 @@
 
 > 专门为exhentai设计，一些好用的快捷功能
 
-- **前置条件**
+- 前置条件
     - 需要独立的个人账号（_收藏相关_）
-    - 只支持里（_exhentai_）
+    - 只支持里站（_exhentai_）
 - 功能
     - 收藏相关
         - 切换已收藏画廊的显示和隐藏
@@ -54,13 +54,25 @@
 > 进入详情页，根据预设规则生成文件名，减少或避免手动设计文件名的过程。通过点击下面的按钮就能复制
 
 - 文件名优先采用**日文**，如果没有则使用**罗马文**
-- - 文件名末尾添加**我的标签**，权重越大，位置越靠前（_隐藏的标签搜索会过滤，但进入详情页也会加入文件名_）
+- - 文件名末尾添加**我的标签**，权重越大，位置越靠前（配合[EhSyringe](#ehsyringe)翻译成中文标签）
 - **特殊字符**不能作为文件名，替换为一个空格进行保护
 - ［］（）字符统一替换为\[]()
 - 检查\[]()符号包裹的字符，例如关键词：汉化、翻訳、Chinese、無修正、DL版，**规则维护在脚本首行，可自行修改**
 - 若存在连续多个空格，替换为一个空格
 - 去除首尾空格
 
+## 其他插件推荐
+
+**EhSyringe**
+
+> E 站注射器，将中文翻译注入到 E 站体内
+
+- Chrome、Firefox浏览器插件。[插件下载地址](https://github.com/EhTagTranslation/EhSyringe/releases)
+- [脚本安装](https://github.com/EhTagTranslation/EhSyringe/releases/latest/download/ehsyringe.user.js)
+
+
 ## 安装
+
+https://github.com/ShineByPupil/filterFavorites/releases/latest/download/filterFavorites.user.js
 
 <a href="https://greasyfork.org/zh-CN/scripts/513527">点击此处安装</a>

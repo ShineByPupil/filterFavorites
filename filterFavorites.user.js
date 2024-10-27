@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.1.5
+// @version      1.1.6
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -15,10 +15,10 @@
 
     // 【文件名去除规则】
     const parenthesesRule = '\\([^(]*(' +
-        ['Vol', 'COMIC', '成年コミック', 'C\\d+', 'よろず', 'FF\\d+', '\\d{4}年\\d{1,2}月'].join('|') +
+        ['Vol', 'COMIC', '成年コミック', 'C\\d+', 'よろず', 'FF\\d+', '\\d{4}年\\d{1,2}月', 'Chinese', '机翻'].join('|') +
         ')[^(]*\\)'; // 圆括号
     const squareBracketsRule = '\\[[^[]*(' +
-        ['汉化', '翻訳', 'Chinese', '無修正', 'DL版', '中国語'].join('|') +
+        ['汉化', '翻訳', 'Chinese', '無修正', 'DL版', '中国語', '中文', '渣翻'].join('|') +
         ')[^[]*\\]'; // 方括号
     let isFilter = localStorage.getItem('isFilter') === 'true';
     let alwaysFilter = localStorage.getItem('alwaysFilter') || '';
@@ -223,11 +223,15 @@
         let title = document.querySelector('#gj').innerText || document.querySelector('#gn').innerText;
 
         title = title
-            .replace(/[［］]/g, match => {
+            .replace(/[［］（）]/g, match => {
                 if (match === '［') {
                     return '[';
                 } else if (match === '］') {
                     return ']';
+                } else if (match === '（') {
+                    return '('
+                } else if (match === '）') {
+                    return ')'
                 }
             })
             .replace(/[\/\\:*?"<>|]/g, ' ')

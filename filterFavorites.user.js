@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.1.4
+// @version      1.1.5
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -66,24 +66,25 @@
             const container = document.createElement('div');
             const shadowRoot = container.attachShadow({mode: 'open'});
 
-            // 创建消息框的样式
+            // 创建消息框的样式，使用明亮的配色
             const style = document.createElement('style');
             style.textContent = `
-                #messageBox {
-                    position: fixed;
-                    top: 20px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background-color: rgba(0, 0, 0, 0.8);
-                    color: white;
-                    padding: 10px 20px;
-                    border-radius: 5px;
-                    z-index: 1000;
-                    display: none; /* 初始隐藏 */
-                    transition: opacity 0.3s ease;
-                    opacity: 1;
-                }
-            `;
+            #messageBox {
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background-color: #ffffff; /* 明亮的背景色 */
+                color: #000000; /* 深色文本 */
+                padding: 10px 20px;
+                border-radius: 5px;
+                z-index: 1000;
+                display: none; /* 初始隐藏 */
+                transition: opacity 0.3s ease;
+                opacity: 1;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); /* 添加阴影效果 */
+            }
+        `;
 
             // 创建消息框节点
             const messageBox = document.createElement('div');

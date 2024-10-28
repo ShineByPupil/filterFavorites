@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.1.7
+// @version      1.1.8
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -103,9 +103,11 @@
     };
 
     // 根据 URL 执行不同的代码
-    if (['/', '/watched', '/popular', '/favorites.php'].includes(window.location.pathname)) {
+    if (['/', '/watched', '/popular'].includes(window.location.pathname)) {
         // 主页
         filterFavorites();
+        setFavorites();
+    } else if (window.location.pathname === '/favorites.php') {
         setFavorites();
     } else if (/^\/g\/\d+\/[a-z0-9]+\/$/.test(window.location.pathname)) {
         // 详情页
@@ -208,7 +210,7 @@
             const find = n.querySelector('[id^="posted_"]')
 
             if (find && find.title !== '') {
-                if (alwaysFilter === find.title && location.pathname !== '/favorites.php') {
+                if (alwaysFilter === find.title) {
                     n.style.display = 'none';
                 } else {
                     n.style.display = isFilter ? 'none' : '';

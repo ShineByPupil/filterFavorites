@@ -18,7 +18,7 @@
         ['Vol', 'COMIC', '成年コミック', 'C\\d+', 'よろず', 'FF\\d+', '\\d{4}年\\d{1,2}月', 'Chinese', '机翻'].join('|') +
         ')[^(]*\\)'; // 圆括号
     const squareBracketsRule = '\\[[^[]*(' +
-        ['汉化', '漢化', '翻訳', 'Chinese', 'chinese', '無修正', 'DL版', '中国語', '中文', '渣翻', '机翻'].join('|') +
+        ['汉化', '漢化', '翻訳', 'Chinese', 'chinese', '無修正', 'DL版', '中国語', '中文', '渣翻', '机翻', '機翻'].join('|') +
         ')[^[]*\\]'; // 方括号
     let isFilter = localStorage.getItem('isFilter') === 'true';
     let alwaysFilter = localStorage.getItem('alwaysFilter') || '';

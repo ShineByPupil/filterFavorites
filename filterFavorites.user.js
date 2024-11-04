@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.1.8
+// @version      1.1.9
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -15,7 +15,7 @@
 
     // 【文件名去除规则】
     const parenthesesRule = '\\([^(]*(' +
-        ['Vol', 'COMIC', '成年コミック', 'C\\d+', 'よろず', 'FF\\d+', '\\d{4}年\\d{1,2}月', 'Chinese', '机翻'].join('|') +
+        ['Vol', 'COMIC', '成年コミック', 'C\\d+', 'よろず', 'FF\\d+', '\\d{4}年\\d{1,2}月', 'Chinese', '机翻', 'コミック', '汉化组'].join('|') +
         ')[^(]*\\)'; // 圆括号
     const squareBracketsRule = '\\[[^[]*(' +
         ['汉化', '漢化', '翻訳', 'Chinese', 'chinese', '無修正', 'DL版', '中国語', '中文', '渣翻', '机翻', '機翻'].join('|') +
@@ -112,6 +112,9 @@
     } else if (/^\/g\/\d+\/[a-z0-9]+\/$/.test(window.location.pathname)) {
         // 详情页
         formatFileName();
+        setFavorites();
+    } else if (/^\/tag\/.*$/.test(window.location.pathname)) {
+        filterFavorites();
         setFavorites();
     }
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.1.9
+// @version      1.2.0
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -255,7 +255,7 @@
                 let map = new Map();
 
                 [...doc.querySelectorAll('#usertags_outer>div')].forEach(n => {
-                    if (n.querySelector('.gt')) {
+                    if (n.querySelector('.gt') && n.querySelector('input[id^=tagwatch]')?.checked) {
                         map.set(
                             n.querySelector('.gt').title,
                             {

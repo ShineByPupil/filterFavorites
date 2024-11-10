@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.2.0
+// @version      1.3.0
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -10,7 +10,7 @@
 // @grant        none
 // ==/UserScript==
 
-(function () {
+(async function () {
     'use strict';
 
     // 【文件名去除规则】
@@ -22,6 +22,7 @@
         ')[^[]*\\]'; // 方括号
     let isFilter = localStorage.getItem('isFilter') === 'true';
     let alwaysFilter = localStorage.getItem('alwaysFilter') || '';
+    let favoriteList = await getFavorites(); // 收藏设置
 
     const utils = {
         messageBox: null,
@@ -118,7 +119,7 @@
         setFavorites();
     }
 
-    // 过滤收藏
+    // 右下角按钮组：收藏显隐、总是过滤、过滤全部
     function filterFavorites() {
         const div = document.createElement('div');
         const refreshBtn = document.createElement('button');
@@ -146,7 +147,37 @@
                 handleFilter();
             }
 
-        })
+        });
+        const filterAllBtn = document.createElement('button');
+        filterAllBtn.innerText = '过滤全部';
+        filterAllBtn.addEventListener('click', async function () {
+            if (!alwaysFilter) {
+                return utils.showMessage('请先设置总是过滤');
+            }
+
+            const index = favoriteList.indexOf(alwaysFilter);
+            if (index !== -1) {
+                const list = Array.from(
+                    document
+                        .querySelector('.itg')
+                        .querySelectorAll('div[id^="posted_"]')
+                )
+                    .filter(n => n.title === '')
+                    .map(n => {
+                        const matches = n.onclick.toString().match(/gid=(\d+)&t=([a-z0-9]+)/);
+                        const [,gid,t] = matches;
+                        return { gid, t };
+                    })
+
+                await Promise.all(
+                    list.map(({ gid, t }) => {
+                        return updateFavorites(index, gid, t);
+                    })
+                )
+
+                utils.showMessage('过滤全部成功');
+            }
+        });
 
         const divStyle = {
             position: 'fixed', // 绝对定位
@@ -173,12 +204,14 @@
             refreshBtn.style[key] = btnStyle[key];
             toggleBtn.style[key] = btnStyle[key];
             filterBtn.style[key] = btnStyle[key];
+            filterAllBtn.style[key] = btnStyle[key];
         }
 
         // 添加按钮到页面
         div.appendChild(refreshBtn);
         div.appendChild(toggleBtn);
         div.appendChild(filterBtn);
+        div.appendChild(filterAllBtn);
         document.body.appendChild(div);
         handleFilter();
 
@@ -295,7 +328,7 @@
         document.querySelector('#gd2').appendChild(button);
     }
 
-    // 设置收藏
+    // 快速收藏按钮组（鼠标悬停画廊封面）
     async function setFavorites() {
         const ulStyle = {
             margin: '0',
@@ -413,14 +446,18 @@
 
         async function createFavoriteLi(disableCache = false) {
             const fragment = document.createDocumentFragment();
-            const favoriteList = await getFavorites(disableCache);
+            if (disableCache) {
+                favoriteList = await getFavorites(true);
+            }
 
             favoriteList.forEach((n, index) => {
                 if (!/^Favorites \d$/.test(n)) {
                     const liNode = utils.createNode(`<li>${n}</li>`);
-                    liNode.addEventListener('click', function () {
+                    liNode.addEventListener('click', async function () {
                         if (gid && t) {
-                            updateFavorites(index, gid, t)
+                            await updateFavorites(index, gid, t);
+                            handleFilter();
+                            utils.showMessage('收藏成功');
                         }
                     })
 
@@ -436,7 +473,7 @@
         }
     }
 
-    // 获取收藏配置列表
+    // API:获取收藏配置列表
     async function getFavorites(disableCache = false) {
         let favoriteList = localStorage.getItem('favoriteList');
 
@@ -461,7 +498,7 @@
         }
     }
 
-    // 更新收藏设置
+    // API:更新收藏
     async function updateFavorites(type, gid, t) {
         const formData = new FormData();
         formData.append('favcat', type);
@@ -486,8 +523,6 @@
 
             const dynamicFunction = new Function(codeStr);
             dynamicFunction();
-            handleFilter();
-            utils.showMessage('收藏成功');
         }
     }
 })();

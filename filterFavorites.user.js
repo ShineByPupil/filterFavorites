@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.3.0
+// @version      1.4.0
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -286,17 +286,14 @@
             })
             .then(doc => {
                 let map = new Map();
+                // 没有关注和隐藏的标签（也希望显示在文件名）
+                map.set('other:extraneous ads', { weight: 10 });
 
                 [...doc.querySelectorAll('#usertags_outer>div')].forEach(n => {
                     if (n.querySelector('.gt') && n.querySelector('input[id^=tagwatch]')?.checked) {
                         map.set(
                             n.querySelector('.gt').title,
-                            {
-                                background: n.querySelector('.gt').style.background,
-                                color: n.querySelector('.gt').style.color,
-                                borderColor: n.querySelector('.gt').style.borderColor,
-                                weight: parseInt(n.querySelector('[id^=tagweight]').value, 10),
-                            }
+                            { weight: parseInt(n.querySelector('[id^=tagweight]').value, 10) }
                         );
                     }
                 });

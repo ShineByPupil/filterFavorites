@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.4.2
+// @version      1.5.0
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -228,6 +228,13 @@
         document.body.appendChild(div);
         handleFilter();
 
+        window.addEventListener('storage', function (event) {
+            if (event.key === 'isFilter') {
+                isFilter = event.newValue === 'true';
+                toggleBtn.innerText = isFilter ? '点击显示' : '点击隐藏';
+                handleFilter();
+            }
+        })
         const observer = new MutationObserver(mutationsList => {
             const domSet = new WeakSet();
 

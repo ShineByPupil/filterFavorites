@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站过滤已收藏
 // @namespace    http://tampermonkey.net/
-// @version      1.5.0
+// @version      1.5.1
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、过滤已收藏画廊功能 2、生成文件名功能
 // @author       ShineByPupil
@@ -18,7 +18,7 @@
         ['Vol', 'COMIC', '成年コミック', 'C\\d+', 'よろず', 'FF\\d+', '\\d{4}年\\d{1,2}月', 'Chinese', '机翻', 'コミック', '汉化组'].join('|') +
         ')[^(]*\\)'; // 圆括号
     const squareBracketsRule = '\\[[^[]*(' +
-        ['汉化', '漢化', '翻訳', 'Chinese', 'chinese', 'CHINESE', '無修正', 'DL版', '中国語', '中文', '渣翻', '机翻', '機翻'].join('|') +
+        ['汉化', '漢化', '翻訳', 'Chinese', 'chinese', 'CHINESE', '無修正', 'DL版', '中国語', '中文', '渣翻', '机翻', '機翻', '重嵌'].join('|') +
         ')[^[]*\\]'; // 方括号
     let isFilter = localStorage.getItem('isFilter') === 'true';
     let alwaysFilter = localStorage.getItem('alwaysFilter') || '';
@@ -307,7 +307,8 @@
             .then(doc => {
                 let map = new Map();
                 // 没有关注和隐藏的标签（也希望显示在文件名）
-                map.set('other:extraneous ads', { weight: 10 });
+                map.set('other:extraneous ads', { weight: -10 });
+                map.set('other:incomplete', { weight: -11 });
 
                 [...doc.querySelectorAll('#usertags_outer>div')].forEach(n => {
                     if (n.querySelector('.gt') && n.querySelector('input[id^=tagwatch]')?.checked) {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站控制画廊已收藏显隐和黑名单
 // @namespace    http://tampermonkey.net/
-// @version      1.5.2
+// @version      1.5.3
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、控制已收藏画廊显隐 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名
 // @author       ShineByPupil
@@ -15,7 +15,7 @@
 
     // 【文件名去除规则】
     const parenthesesRule = '\\([^(]*(' +
-        ['Vol', 'COMIC', '成年コミック', 'C\\d+', 'よろず', 'FF\\d+', '\\d{4}年\\d{1,2}月', 'Chinese', '机翻', 'コミック', '汉化组'].join('|') +
+        ['Vol', 'COMIC', '成年コミック', 'C\\d+', 'よろず', 'FF\\d+', '\\d{4}年\\d{1,2}月', 'Chinese', '机翻', 'コミック', '汉化组', '中文'].join('|') +
         ')[^(]*\\)'; // 圆括号
     const squareBracketsRule = '\\[[^[]*(' +
         ['汉化', '漢化', '翻訳', 'Chinese', 'chinese', 'CHINESE', '無修正', 'DL版', '中国語', '中文', '渣翻', '机翻', '機翻', '重嵌'].join('|') +

@@ -65,7 +65,7 @@
          */
         createShadowMessageBox: function () {
             const container = document.createElement('div');
-            const shadowRoot = container.attachShadow({mode: 'open'});
+            const shadowRoot = container.attachShadow({ mode: 'open' });
 
             // 创建消息框的样式，使用明亮的配色
             const style = document.createElement('style');
@@ -119,8 +119,8 @@
         setFavorites();
     }
 
-    // 右下角按钮组：收藏显隐、总是过滤、过滤全部
-    function filterFavorites() {
+
+    function filterFavorites() { // 右下角按钮组：收藏显隐、总是过滤、过滤全部
         const div = document.createElement('div');
         const refreshBtn = document.createElement('button');
         refreshBtn.innerText = '↻刷新';
@@ -165,7 +165,7 @@
                     .filter(n => n.title === '')
                     .map(n => {
                         const matches = n.onclick.toString().match(/gid=(\d+)&t=([a-z0-9]+)/);
-                        const [,gid,t] = matches;
+                        const [, gid, t] = matches;
                         return { gid, t };
                     })
 
@@ -256,8 +256,7 @@
         }
     }
 
-    // 开始过滤
-    function handleFilter() {
+    function handleFilter() { // 开始过滤
         const list = document.querySelector('table.itg')
             ? document.querySelectorAll('table.itg tr')
             : document.querySelectorAll('.itg.gld .gl1t');
@@ -275,8 +274,7 @@
         });
     }
 
-    // 生成文件名成
-    async function formatFileName() {
+    async function formatFileName() { // 生成文件名成
         const rule = new RegExp(`${parenthesesRule}|${squareBracketsRule}`, 'g');
         let title = document.querySelector('#gj').innerText || document.querySelector('#gn').innerText;
 
@@ -346,8 +344,7 @@
         document.querySelector('#gd2').appendChild(button);
     }
 
-    // 快速收藏按钮组（鼠标悬停画廊封面）
-    async function setFavorites() {
+    async function setFavorites() { // 快速收藏按钮组（鼠标悬停画廊封面）
         const ulStyle = {
             margin: '0',
             padding: '0',
@@ -415,7 +412,7 @@
         const itgNode = document.querySelector('.itg');
         if (itgNode) {
             itgNode.addEventListener('mouseover', function (event) {
-                const {target} = event;
+                const { target } = event;
 
                 if (target.tagName === 'IMG' && target.alt !== 'T') {
                     const href = target.parentNode.href;
@@ -431,7 +428,7 @@
                 }
             });
             itgNode.addEventListener('mouseout', function (e) {
-                const {target} = e;
+                const { target } = e;
 
                 if (target.tagName === 'IMG' && !ulNode.matches(':hover')) {
                     gid = null;
@@ -491,8 +488,10 @@
         }
     }
 
-    // API:获取收藏配置列表
-    async function getFavorites(disableCache = false) {
+    /*
+    * 11
+    * */
+    async function getFavorites(disableCache = false) { // API:获取收藏配置列表
         let favoriteList = localStorage.getItem('favoriteList');
 
         if (favoriteList && disableCache === false) {
@@ -516,8 +515,7 @@
         }
     }
 
-    // API:更新收藏
-    async function updateFavorites(type, gid, t) {
+    async function updateFavorites(type, gid, t) { // API:更新收藏
         const formData = new FormData();
         formData.append('favcat', type);
         formData.append('favnote', '');
@@ -525,7 +523,7 @@
 
         const response = await fetch(
             `https://exhentai.org/gallerypopups.php?gid=${gid}&t=${t}&act=addfav`,
-            {method: 'POST', body: formData});
+            { method: 'POST', body: formData });
 
         const domStr = await response.text();
         const parser = new DOMParser();

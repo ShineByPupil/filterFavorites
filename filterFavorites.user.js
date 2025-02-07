@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站控制画廊已收藏显隐和黑名单
 // @namespace    http://tampermonkey.net/
-// @version      1.5.3
+// @version      1.5.4
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、控制已收藏画廊显隐 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名
 // @author       ShineByPupil
@@ -170,17 +170,36 @@
                     })
 
                 // 处理并发请求
-                const set = new Set();
-                const enqueue = async function (promise) {
-                    if (set.size > 5) {
-                        await Promise.race(set);
+                const enqueue = function (activeSize = 5) {
+                    const activeSet = new Set();
+                    const waitArr = [];
+                    const runPromise = function (promise) {
+                        const p = promise().finally(() => {
+                            activeSet.delete(p);
+
+                            if (waitArr.length > 0) {
+                                runPromise(waitArr.shift());
+                            }
+                        });
+                        activeSet.add(p);
                     }
 
-                    const p = promise().finally(() => set.delete(p));
-                    set.add(p);
-                    return p;
-                }
+                    return function (promise) {
+                        return new Promise((resolve, reject) => {
+                            const wrappedPromise = () => {
+                                return promise()
+                                    .then(resolve) // 成功时解析外部 Promise
+                                    .catch(reject); // 失败时拒绝外部 Promise
+                            };
 
+                            if (activeSet.size >= activeSize) {
+                                waitArr.push(wrappedPromise);
+                            } else {
+                                runPromise(wrappedPromise);
+                            }
+                        });
+                    }
+                }()
 
                 await Promise.all(
                     list.map(({ gid, t }) => {

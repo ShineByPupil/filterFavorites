@@ -14,12 +14,13 @@
     'use strict';
 
     // 【文件名去除规则】
-    const parenthesesRule = '\\([^(]*(' +
-        ['Vol', 'COMIC', '成年コミック', 'C\\d+', 'よろず', 'FF\\d+', '\\d{4}年\\d{1,2}月', 'Chinese', '机翻', 'コミック', '汉化组', '中文'].join('|') +
-        ')[^(]*\\)'; // 圆括号
-    const squareBracketsRule = '\\[[^[]*(' +
-        ['汉化', '漢化', '翻訳', 'Chinese', 'chinese', 'CHINESE', '無修正', 'DL版', '中国語', '中文', '渣翻', '机翻', '機翻', '重嵌'].join('|') +
-        ')[^[]*\\]'; // 方括号
+    const keyword = [
+        'Vol', 'COMIC', '成年コミック', 'C\\d+', 'よろず', 'FF\\d+', '\\d{4}年\\d{1,2}月', 'コミック', 'オリジナル',
+        '汉化组', '中文', '汉化', '漢化', '翻訳', 'Chinese', 'chinese', 'CHINESE',  '中国語',
+        '無修正', 'DL版', '渣翻', '机翻', '機翻', '重嵌', '嵌字'
+    ]
+    const parenthesesRule = '\\([^(]*(' + keyword.join('|') + ')[^(]*\\)'; // 圆括号
+    const squareBracketsRule = '\\[[^[]*(' + keyword.join('|') + ')[^[]*\\]'; // 方括号
     let isFilter = localStorage.getItem('isFilter') === 'true';
     let alwaysFilter = localStorage.getItem('alwaysFilter') || '';
     let favoriteList = await getFavorites(); // 收藏设置

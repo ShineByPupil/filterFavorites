@@ -1,0 +1,15 @@
+{
+  "name": "filterfavorites",
+  "version": "1.0.0",
+  "description": "专门为exhentai设计，一些好用的快捷功能",
+  "main": "filterFavorites.user.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "prettier": "^3.5.3"
+  }
+}

@@ -40,6 +40,7 @@
     "機翻",
     "重嵌",
     "嵌字",
+    "Decensored",
   ];
   const parenthesesRule = "\\([^(]*(" + keyword.join("|") + ")[^(]*\\)"; // 圆括号
   const squareBracketsRule = "\\[[^[]*(" + keyword.join("|") + ")[^[]*\\]"; // 方括号

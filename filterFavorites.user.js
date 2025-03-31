@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站控制画廊已收藏显隐和黑名单
 // @namespace    http://tampermonkey.net/
-// @version      2.0.0
+// @version      2.1.0
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、控制已收藏画廊显隐 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名
 // @author       ShineByPupil
@@ -157,7 +157,7 @@
           } else if (index && this.gid && this.t) {
             await updateFavorites(index, this.gid, this.t);
             this.gid = this.t = null;
-            FilterBtn.handleFilter();
+            filterBtn.handleFilter();
             messageBox.show("收藏成功");
           }
         }
@@ -244,21 +244,25 @@
 
   class FilterBtn {
     constructor() {
+      this.isFilter = localStorage.getItem("isFilter") === "true";
+      this.alwaysFilter = localStorage.getItem("alwaysFilter") || "";
+
       this.refreshBtn = null;
       this.toggleBtn = null;
       this.filterBtn = null;
       this.filterAllBtn = null;
+      this.favoriteSup = null;
+      this.filterSup = null;
+
+      this.favoriteCount = 0;
+      this.filterCount = 0;
     }
-
-    static isFilter = localStorage.getItem("isFilter") === "true";
-
-    static alwaysFilter = localStorage.getItem("alwaysFilter") || "";
 
     async init() {
       this.initRender();
       this.initEvent();
       this.initObserver();
-      FilterBtn.handleFilter();
+      this.handleFilter();
     }
 
     initRender() {
@@ -268,34 +272,59 @@
       shadow.innerHTML = `
           <div>
             <button class="refresh">↻刷新</button>
-            <button class="toggle">${FilterBtn.isFilter ? "点击显示" : "点击隐藏"}</button>
+            <button class="toggle">${this.isFilter ? "点击显示" : "点击隐藏"}</button>
             <button class="filter">总是过滤</button>
-            <button class="filterAll">过滤全部</button>
+            <button class="filterAll ${!this.alwaysFilter ? "disabled" : ""}">过滤全部</button>
+            <sup class="favoriteCount"></sup>
+            <sup class="filterCount"></sup>
           </div>
         `;
 
       const style = document.createElement("style");
       style.textContent = `
-          div {
-            position: fixed;
-            gap: 6px;
-            right: 10px;
-            bottom: 10px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-          }
-          
-          button {
-            background-color: #007BFF;
-            color: #FFFFFF;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            padding: 4px 10px;
-            text-align: center;
-          }
-        `;
+        div {
+          position: fixed;
+          gap: 6px;
+          right: 15px;
+          bottom: 15px;
+          z-index: 1000;
+          display: flex;
+          flex-direction: column;
+        }
+        
+        button {
+          background-color: #007BFF;
+          color: #FFFFFF;
+          border: none;
+          border-radius: 5px;
+          cursor: pointer;
+          padding: 4px 10px;
+          text-align: center;
+        }
+        
+        button.disabled {
+          background-color: #C0C4CC;
+          cursor: not-allowed;
+        }
+        
+        sup {
+          position: absolute;
+          right: 0;
+          transform: translateX(50%);
+          background-color: #f56c6c;
+          border-radius: 10px;
+          padding: 0 4px;
+          display: none;
+          color: #FFFFFF;
+        }
+        
+        sup.favoriteCount {
+          top: 27px;
+        }
+          sup.filterCount {
+          top: 60px;
+        }
+      `;
 
       shadow.appendChild(style);
       document.body.appendChild(div);
@@ -304,34 +333,35 @@
       this.toggleBtn = shadow.querySelector(".toggle");
       this.filterBtn = shadow.querySelector(".filter");
       this.filterAllBtn = shadow.querySelector(".filterAll");
+      this.favoriteSup = shadow.querySelector(".favoriteCount");
+      this.filterSup = shadow.querySelector(".filterCount");
     }
 
     initEvent() {
       this.refreshBtn.addEventListener("click", () => location.reload());
       this.toggleBtn.addEventListener("click", (e) => {
-        FilterBtn.isFilter = !FilterBtn.isFilter;
-        localStorage.setItem("isFilter", FilterBtn.isFilter);
-        e.target.innerText = FilterBtn.isFilter ? "点击显示" : "点击隐藏";
-        FilterBtn.handleFilter();
+        this.isFilter = !this.isFilter;
+        localStorage.setItem("isFilter", this.isFilter);
+        e.target.innerText = this.isFilter ? "点击显示" : "点击隐藏";
+        this.handleFilter();
       });
       this.filterBtn.addEventListener("click", () => {
-        const userInput = prompt(
-          "请输入总是过滤的收藏名：",
-          FilterBtn.alwaysFilter,
-        );
+        const userInput = prompt("请输入总是过滤的收藏名：", this.alwaysFilter);
 
         if (userInput !== null) {
-          FilterBtn.alwaysFilter = userInput;
-          localStorage.setItem("alwaysFilter", FilterBtn.alwaysFilter);
-          FilterBtn.handleFilter();
+          this.alwaysFilter = userInput;
+          localStorage.setItem("alwaysFilter", this.alwaysFilter);
+          this.handleFilter();
+
+          this.filterAllBtn.classList.toggle("disabled", !this.alwaysFilter);
         }
       });
       this.filterAllBtn.addEventListener("click", async () => {
-        if (!FilterBtn.alwaysFilter) {
+        if (!this.alwaysFilter) {
           return messageBox.show("请先设置总是过滤");
         }
 
-        const index = favoriteList.indexOf(FilterBtn.alwaysFilter);
+        const index = favoriteList.indexOf(this.alwaysFilter);
         if (index === -1) {
           return messageBox.show("总是过滤收藏不存在");
         }
@@ -389,11 +419,9 @@
 
       window.addEventListener("storage", (e) => {
         if (e.key === "isFilter") {
-          FilterBtn.isFilter = e.newValue === "true";
-          this.toggleBtn.innerText = FilterBtn.isFilter
-            ? "点击显示"
-            : "点击隐藏";
-          FilterBtn.handleFilter();
+          this.isFilter = e.newValue === "true";
+          this.toggleBtn.innerText = this.isFilter ? "点击显示" : "点击隐藏";
+          this.handleFilter();
         }
       });
     }
@@ -408,7 +436,7 @@
             !domSet.has(mutation.target)
           ) {
             domSet.add(mutation.target);
-            FilterBtn.handleFilter();
+            this.handleFilter();
           }
         }
       });
@@ -424,8 +452,12 @@
     }
 
     // 更新列表视图的显隐状态（根据切换/总是过滤的规则）
-    static handleFilter() {
+    handleFilter() {
       if (window.location.pathname === "/favorites.php") return;
+
+      this.favoriteSup.style.display = "";
+      this.filterSup.style.display = "";
+      this.favoriteCount = this.filterCount = 0;
 
       const list = document.querySelector("table.itg")
         ? document.querySelectorAll("table.itg tr")
@@ -436,13 +468,26 @@
         const find = n.querySelector('[id^="posted_"]');
 
         if (find && find.title !== "") {
-          if (FilterBtn.alwaysFilter === find.title) {
+          if (this.alwaysFilter === find.title) {
             n.style.display = "none";
+            this.filterCount++;
           } else {
-            n.style.display = FilterBtn.isFilter ? "none" : "";
+            n.style.display = this.isFilter ? "none" : "";
+            this.favoriteCount++;
           }
         }
       });
+
+      if (this.favoriteCount && this.isFilter) {
+        this.favoriteSup.innerText =
+          this.favoriteCount > 99 ? "99+" : this.favoriteCount;
+        this.favoriteSup.style.display = "block";
+      }
+      if (this.filterCount) {
+        this.filterSup.innerText =
+          this.filterCount > 99 ? "99+" : this.filterCount;
+        this.filterSup.style.display = "block";
+      }
     }
   }
 
@@ -483,6 +528,8 @@
   let favoriteList = await getFavorites();
   // 收藏按钮组
   const favoritesBtn = new FavoritesBtn();
+  // 过滤按钮组
+  let filterBtn = null;
   await favoritesBtn.init();
 
   const messageBox = document.createElement("message-box");
@@ -492,6 +539,8 @@
   function createFilterBtn() {
     const filterBtn = new FilterBtn();
     filterBtn.init();
+
+    return filterBtn;
   }
 
   // ################################# API相关 #################################
@@ -641,12 +690,12 @@
 
   if (["/", "/watched", "/popular"].includes(pathname)) {
     // 主页
-    createFilterBtn();
+    filterBtn = createFilterBtn();
   } else if (pathname === "/favorites.php") {
   } else if (/^\/g\/\d+\/[a-z0-9]+\/$/.test(pathname)) {
     // 详情页
     await formatFileName();
   } else if (/^\/tag\/.*$/.test(pathname)) {
-    createFilterBtn();
+    filterBtn = createFilterBtn();
   }
 })();

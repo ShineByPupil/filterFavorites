@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站控制画廊已收藏显隐和黑名单
 // @namespace    http://tampermonkey.net/
-// @version      1.5.4
+// @version      2.0.0
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、控制已收藏画廊显隐 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名
 // @author       ShineByPupil
@@ -13,6 +13,440 @@
 (async function () {
   "use strict";
 
+  // ################################# 函数类 #################################
+  class MessageBox extends HTMLElement {
+    constructor() {
+      super();
+      const shadow = this.attachShadow({ mode: "open" });
+
+      this.message = document.createElement("div");
+      this.message.className = "messageBox";
+
+      const style = document.createElement("style");
+      style.textContent = `
+          .messageBox {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #ffffff; /* 明亮的背景色 */
+            color: #000000; /* 深色文本 */
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 1000;
+            display: none; /* 初始隐藏 */
+            transition: opacity 0.3s ease;
+            opacity: 1;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); /* 添加阴影效果 */
+          }
+        `;
+
+      shadow.appendChild(style);
+      shadow.appendChild(this.message);
+    }
+
+    show(message, duration = 2500) {
+      this.message.textContent = message;
+      this.message.style.display = "block"; // 显示消息
+
+      // 设置一定时间后自动隐藏消息
+      setTimeout(() => {
+        this.message.style.display = "none";
+      }, duration);
+    }
+  }
+  customElements.define("message-box", MessageBox);
+
+  class FavoritesBtn {
+    constructor() {
+      this.ulNode = null;
+      this.gid = null;
+      this.t = null;
+    }
+
+    async init() {
+      await this.initRender();
+      await this.initEvent();
+    }
+
+    async initRender() {
+      const div = document.createElement("div");
+      const shadow = div.attachShadow({ mode: "open" });
+      const ulNode = (this.ulNode = document.createElement("ul"));
+      ulNode.innerHTML = `
+          <li class="favdel">取消收藏</li>
+          <li class="refresh">↻刷新</li>
+        `;
+
+      for (let i = favoriteList.length - 1; i >= 0; i--) {
+        if (!/^Favorites \d$/.test(favoriteList[i])) {
+          const favoriteLi = document.createElement("li");
+          favoriteLi.innerText = favoriteList[i];
+          favoriteLi.title = favoriteList[i];
+          favoriteLi.setAttribute("data-index", i.toString());
+          ulNode.prepend(favoriteLi);
+        }
+      }
+
+      const style = document.createElement("style");
+      style.textContent = `
+          ul {
+            margin: 0;
+            padding: 0;
+            display: none;
+            flex-direction: column;
+            position: absolute;
+            z-index: 1000;
+            min-width: 80px;
+            max-width: 130px;
+          }
+          
+          li {
+            list-style-type: none;
+            background-color: #007BFF;
+            color: #FFFFFF;
+            cursor: pointer;
+            padding: 2px 4px;
+            margin: 2px 0;
+            border-radius: 5px;
+            text-align: center;
+            white-space: nowrap; /* 不换行 */
+            overflow: hidden; /* 隐藏溢出的内容 */
+            text-overflow: ellipsis; /* 用省略号表示溢出的文本 */
+          }
+        `;
+
+      shadow.appendChild(style);
+      shadow.appendChild(ulNode);
+      document.body.appendChild(div);
+    }
+
+    async initEvent() {
+      // 收藏按钮事件委托
+      this.ulNode.addEventListener("click", async (event) => {
+        const { target } = event;
+        const index = target.getAttribute("data-index");
+
+        if (target.tagName === "LI") {
+          if (target.classList.contains("favdel") && this.gid && this.t) {
+            // 取消收藏
+            await updateFavorites("favdel", this.gid, this.t);
+            this.gid = this.t = null;
+          } else if (target.classList.contains("refresh")) {
+            // 刷新
+            this.ulNode.style.display = "none";
+
+            favoriteList = await getFavorites(true);
+
+            requestAnimationFrame(() => {
+              let list = this.ulNode.querySelectorAll(["li[data-index]"]) || [];
+
+              for (let i = 0; i < list.length; i++) {
+                this.ulNode.removeChild(list[i]);
+              }
+
+              for (let i = favoriteList.length - 1; i >= 0; i--) {
+                if (!/^Favorites \d$/.test(favoriteList[i])) {
+                  const favoriteLi = document.createElement("li");
+                  favoriteLi.innerText = favoriteList[i];
+                  favoriteLi.setAttribute("data-index", i.toString());
+                  this.ulNode.prepend(favoriteLi);
+                }
+              }
+            });
+          } else if (index && this.gid && this.t) {
+            await updateFavorites(index, this.gid, this.t);
+            this.gid = this.t = null;
+            FilterBtn.handleFilter();
+            messageBox.show("收藏成功");
+          }
+        }
+      });
+
+      // 搜索主页，悬停封面事件
+      const itgNode = document.querySelector(".itg");
+      if (itgNode) {
+        itgNode.addEventListener("mouseover", function (event) {
+          const { target } = event;
+
+          if (target.tagName === "IMG" && target.alt !== "T") {
+            const A = target.closest("a");
+            if (!A) return;
+            const groups = A.href.split("/");
+
+            favoritesBtn.update(
+              groups[groups.length - 3],
+              groups[groups.length - 2],
+            );
+
+            const Div = target.closest("div");
+
+            if (Div) {
+              const rect = Div.getBoundingClientRect();
+              favoritesBtn.show(
+                `${rect.left + 10 + window.scrollX}px`,
+                `${rect.top + 10 + window.scrollY}px`,
+              );
+            }
+          }
+        });
+        itgNode.addEventListener("mouseout", function (e) {
+          const { target } = e;
+
+          if (
+            target.tagName === "IMG" &&
+            !favoritesBtn.ulNode.matches(":hover")
+          ) {
+            favoritesBtn.hide();
+          }
+        });
+      }
+
+      // 详情页，悬停封面事件
+      const cover = document.querySelector("#gd1 div");
+      if (cover) {
+        cover.addEventListener("mouseover", function (event) {
+          const groups = location.pathname.split("/");
+
+          favoritesBtn.update(
+            groups[groups.length - 3],
+            groups[groups.length - 2],
+          );
+          const rect = event.target.getBoundingClientRect();
+          favoritesBtn.show(
+            `${rect.left + 10 + window.scrollX}px`,
+            `${rect.top + 10 + window.scrollY}px`,
+          );
+        });
+        cover.addEventListener("mouseout", function () {
+          if (!favoritesBtn.ulNode.matches(":hover")) {
+            favoritesBtn.hide();
+          }
+        });
+      }
+    }
+
+    show(left, top) {
+      this.ulNode.style.display = "flex";
+      this.ulNode.style.left = left;
+      this.ulNode.style.top = top;
+    }
+
+    hide() {
+      this.ulNode.style.display = "none";
+    }
+
+    update(gid, t) {
+      this.gid = gid;
+      this.t = t;
+    }
+  }
+
+  class FilterBtn {
+    constructor() {
+      this.refreshBtn = null;
+      this.toggleBtn = null;
+      this.filterBtn = null;
+      this.filterAllBtn = null;
+    }
+
+    static isFilter = localStorage.getItem("isFilter") === "true";
+
+    static alwaysFilter = localStorage.getItem("alwaysFilter") || "";
+
+    async init() {
+      this.initRender();
+      this.initEvent();
+      this.initObserver();
+      FilterBtn.handleFilter();
+    }
+
+    initRender() {
+      const div = document.createElement("div");
+      const shadow = div.attachShadow({ mode: "open" });
+
+      shadow.innerHTML = `
+          <div>
+            <button class="refresh">↻刷新</button>
+            <button class="toggle">${FilterBtn.isFilter ? "点击显示" : "点击隐藏"}</button>
+            <button class="filter">总是过滤</button>
+            <button class="filterAll">过滤全部</button>
+          </div>
+        `;
+
+      const style = document.createElement("style");
+      style.textContent = `
+          div {
+            position: fixed;
+            gap: 6px;
+            right: 10px;
+            bottom: 10px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+          }
+          
+          button {
+            background-color: #007BFF;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            padding: 4px 10px;
+            text-align: center;
+          }
+        `;
+
+      shadow.appendChild(style);
+      document.body.appendChild(div);
+
+      this.refreshBtn = shadow.querySelector(".refresh");
+      this.toggleBtn = shadow.querySelector(".toggle");
+      this.filterBtn = shadow.querySelector(".filter");
+      this.filterAllBtn = shadow.querySelector(".filterAll");
+    }
+
+    initEvent() {
+      this.refreshBtn.addEventListener("click", () => location.reload());
+      this.toggleBtn.addEventListener("click", (e) => {
+        FilterBtn.isFilter = !FilterBtn.isFilter;
+        localStorage.setItem("isFilter", FilterBtn.isFilter);
+        e.target.innerText = FilterBtn.isFilter ? "点击显示" : "点击隐藏";
+        FilterBtn.handleFilter();
+      });
+      this.filterBtn.addEventListener("click", () => {
+        const userInput = prompt(
+          "请输入总是过滤的收藏名：",
+          FilterBtn.alwaysFilter,
+        );
+
+        if (userInput !== null) {
+          FilterBtn.alwaysFilter = userInput;
+          localStorage.setItem("alwaysFilter", FilterBtn.alwaysFilter);
+          FilterBtn.handleFilter();
+        }
+      });
+      this.filterAllBtn.addEventListener("click", async () => {
+        if (!FilterBtn.alwaysFilter) {
+          return messageBox.show("请先设置总是过滤");
+        }
+
+        const index = favoriteList.indexOf(FilterBtn.alwaysFilter);
+        if (index === -1) {
+          return messageBox.show("总是过滤收藏不存在");
+        }
+
+        const list = Array.from(
+          document.querySelector(".itg").querySelectorAll('div[id^="posted_"]'),
+        )
+          .filter((n) => n.title === "")
+          .map((n) => {
+            const matches = n.onclick
+              .toString()
+              .match(/gid=(\d+)&t=([a-z0-9]+)/);
+            const [, gid, t] = matches;
+            return { gid, t };
+          });
+
+        // 处理并发请求
+        const enqueue = (function (activeSize = 5) {
+          const activeSet = new Set();
+          const waitArr = [];
+          const runPromise = function (promise) {
+            const p = promise().finally(() => {
+              activeSet.delete(p);
+
+              if (waitArr.length > 0) {
+                runPromise(waitArr.shift());
+              }
+            });
+            activeSet.add(p);
+          };
+
+          return function (promise) {
+            return new Promise((resolve, reject) => {
+              const wrappedPromise = () => {
+                return promise().then(resolve).catch(reject);
+              };
+
+              if (activeSet.size >= activeSize) {
+                waitArr.push(wrappedPromise);
+              } else {
+                runPromise(wrappedPromise);
+              }
+            });
+          };
+        })();
+
+        await Promise.all(
+          list.map(({ gid, t }) => {
+            return enqueue(() => updateFavorites(index, gid, t));
+          }),
+        );
+
+        messageBox.show("过滤全部成功");
+      });
+
+      window.addEventListener("storage", (e) => {
+        if (e.key === "isFilter") {
+          FilterBtn.isFilter = e.newValue === "true";
+          this.toggleBtn.innerText = FilterBtn.isFilter
+            ? "点击显示"
+            : "点击隐藏";
+          FilterBtn.handleFilter();
+        }
+      });
+    }
+
+    initObserver() {
+      const observer = new MutationObserver((mutationsList) => {
+        const domSet = new WeakSet();
+
+        for (let mutation of mutationsList) {
+          if (
+            /^posted_\d+$/.test(mutation.target.id) &&
+            !domSet.has(mutation.target)
+          ) {
+            domSet.add(mutation.target);
+            FilterBtn.handleFilter();
+          }
+        }
+      });
+
+      // 开始观察目标节点
+      const targetNode = document.querySelector(".itg");
+      if (targetNode) {
+        observer.observe(targetNode, {
+          attributes: true,
+          subtree: true,
+        });
+      }
+    }
+
+    // 更新列表视图的显隐状态（根据切换/总是过滤的规则）
+    static handleFilter() {
+      if (window.location.pathname === "/favorites.php") return;
+
+      const list = document.querySelector("table.itg")
+        ? document.querySelectorAll("table.itg tr")
+        : document.querySelectorAll(".itg.gld .gl1t");
+
+      [...list].forEach((n) => {
+        // 收藏状态：title 收藏夹名称，若空为未收藏
+        const find = n.querySelector('[id^="posted_"]');
+
+        if (find && find.title !== "") {
+          if (FilterBtn.alwaysFilter === find.title) {
+            n.style.display = "none";
+          } else {
+            n.style.display = FilterBtn.isFilter ? "none" : "";
+          }
+        }
+      });
+    }
+  }
+
+  // ################################# 变量类 #################################
   // 【文件名去除规则】
   const keyword = [
     "Vol",
@@ -44,284 +478,84 @@
   ];
   const parenthesesRule = "\\([^(]*(" + keyword.join("|") + ")[^(]*\\)"; // 圆括号
   const squareBracketsRule = "\\[[^[]*(" + keyword.join("|") + ")[^[]*\\]"; // 方括号
-  let isFilter = localStorage.getItem("isFilter") === "true";
-  let alwaysFilter = localStorage.getItem("alwaysFilter") || "";
-  let favoriteList = await getFavorites(); // 收藏设置
 
-  const utils = {
-    messageBox: null,
-    /**
-     * 在屏幕上显示指定时间长度的消息。
-     *
-     * @param {string} message - 要显示的消息。
-     * @param {number} [duration=2500] - 消息应显示的毫秒数。默认为2500毫秒。
-     * @return {void} 此函数不返回值。
-     */
-    showMessage: function (message, duration = 2500) {
-      if (!this.messageBox) {
-        // 创建一个 Shadow Root
-        this.createShadowMessageBox();
-      }
+  // 个人收藏信息
+  let favoriteList = await getFavorites();
+  // 收藏按钮组
+  const favoritesBtn = new FavoritesBtn();
+  await favoritesBtn.init();
 
-      this.messageBox.textContent = message;
-      this.messageBox.style.display = "block"; // 显示消息
+  const messageBox = document.createElement("message-box");
+  document.body.appendChild(messageBox);
 
-      // 设置一定时间后自动隐藏消息
-      setTimeout(() => {
-        this.messageBox.style.display = "none";
-      }, duration);
-    },
-    /**
-     * 从提供的模板字符串创建一个新的 DOM 节点。
-     *
-     * @param {string} template - 要创建节点的 HTML 模板字符串。
-     * @return {Node} 新创建的 DOM 节点。
-     */
-    createNode: function (template) {
-      const div = document.createElement("div");
-      div.innerHTML = template.trim();
-      return div.firstChild;
-    },
-    /**
-     * 创建一个带有 Shadow DOM 的消息框。
-     *
-     * @return {void}
-     */
-    createShadowMessageBox: function () {
-      const container = document.createElement("div");
-      const shadowRoot = container.attachShadow({ mode: "open" });
-
-      // 创建消息框的样式，使用明亮的配色
-      const style = document.createElement("style");
-      style.textContent = `
-            #messageBox {
-                position: fixed;
-                top: 20px;
-                left: 50%;
-                transform: translateX(-50%);
-                background-color: #ffffff; /* 明亮的背景色 */
-                color: #000000; /* 深色文本 */
-                padding: 10px 20px;
-                border-radius: 5px;
-                z-index: 1000;
-                display: none; /* 初始隐藏 */
-                transition: opacity 0.3s ease;
-                opacity: 1;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); /* 添加阴影效果 */
-            }
-        `;
-
-      // 创建消息框节点
-      const messageBox = document.createElement("div");
-      messageBox.id = "messageBox";
-
-      // 将样式和消息框添加到 Shadow DOM
-      shadowRoot.appendChild(style);
-      shadowRoot.appendChild(messageBox);
-
-      // 将包含 Shadow DOM 的容器添加到文档中
-      document.body.appendChild(container);
-
-      // 保存对消息框的引用
-      this.messageBox = messageBox;
-    },
-  };
-
-  // 根据 URL 执行不同的代码
-  if (["/", "/watched", "/popular"].includes(window.location.pathname)) {
-    // 主页
-    filterFavorites();
-    setFavorites();
-  } else if (window.location.pathname === "/favorites.php") {
-    setFavorites();
-  } else if (/^\/g\/\d+\/[a-z0-9]+\/$/.test(window.location.pathname)) {
-    // 详情页
-    formatFileName();
-    setFavorites();
-  } else if (/^\/tag\/.*$/.test(window.location.pathname)) {
-    filterFavorites();
-    setFavorites();
+  // 【过滤按钮组】
+  function createFilterBtn() {
+    const filterBtn = new FilterBtn();
+    filterBtn.init();
   }
 
-  function filterFavorites() {
-    // 右下角按钮组：收藏显隐、总是过滤、过滤全部
-    const div = document.createElement("div");
-    const refreshBtn = document.createElement("button");
-    refreshBtn.innerText = "↻刷新";
-    refreshBtn.addEventListener("click", function () {
-      location.reload();
-    });
-    const toggleBtn = document.createElement("button");
-    toggleBtn.innerText = isFilter ? "点击显示" : "点击隐藏";
-    toggleBtn.addEventListener("click", function () {
-      isFilter = !isFilter;
-      localStorage.setItem("isFilter", isFilter);
-      toggleBtn.innerText = isFilter ? "点击显示" : "点击隐藏";
+  // ################################# API相关 #################################
 
-      handleFilter();
-    });
-    const filterBtn = document.createElement("button");
-    filterBtn.innerText = "总是过滤";
-    filterBtn.addEventListener("click", function () {
-      const userInput = prompt("请输入总是过滤的收藏名：", alwaysFilter);
+  // 获取收藏
+  async function getFavorites(disableCache = false) {
+    // API:获取收藏配置列表
+    let favoriteList = localStorage.getItem("favoriteList");
+    let result = null;
 
-      if (userInput !== null) {
-        alwaysFilter = userInput;
-        localStorage.setItem("alwaysFilter", alwaysFilter);
-        handleFilter();
+    if (favoriteList && disableCache === false) {
+      result = JSON.parse(favoriteList);
+    } else {
+      const response = await fetch("https://exhentai.org/uconfig.php");
+      const domStr = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(domStr, "text/html");
+
+      const list = Array.from(doc.querySelectorAll("#favsel input")).map(
+        (n) => n.value,
+      );
+
+      if (list.length) {
+        localStorage.setItem("favoriteList", JSON.stringify(list));
+        result = list;
+      } else {
+        throw new Error(doc.body.innerText);
       }
-    });
-    const filterAllBtn = document.createElement("button");
-    filterAllBtn.innerText = "过滤全部";
-    filterAllBtn.addEventListener("click", async function () {
-      if (!alwaysFilter) {
-        return utils.showMessage("请先设置总是过滤");
-      }
-
-      const index = favoriteList.indexOf(alwaysFilter);
-      if (index !== -1) {
-        const list = Array.from(
-          document.querySelector(".itg").querySelectorAll('div[id^="posted_"]'),
-        )
-          .filter((n) => n.title === "")
-          .map((n) => {
-            const matches = n.onclick
-              .toString()
-              .match(/gid=(\d+)&t=([a-z0-9]+)/);
-            const [, gid, t] = matches;
-            return { gid, t };
-          });
-
-        // 处理并发请求
-        const enqueue = (function (activeSize = 5) {
-          const activeSet = new Set();
-          const waitArr = [];
-          const runPromise = function (promise) {
-            const p = promise().finally(() => {
-              activeSet.delete(p);
-
-              if (waitArr.length > 0) {
-                runPromise(waitArr.shift());
-              }
-            });
-            activeSet.add(p);
-          };
-
-          return function (promise) {
-            return new Promise((resolve, reject) => {
-              const wrappedPromise = () => {
-                return promise()
-                  .then(resolve) // 成功时解析外部 Promise
-                  .catch(reject); // 失败时拒绝外部 Promise
-              };
-
-              if (activeSet.size >= activeSize) {
-                waitArr.push(wrappedPromise);
-              } else {
-                runPromise(wrappedPromise);
-              }
-            });
-          };
-        })();
-
-        await Promise.all(
-          list.map(({ gid, t }) => {
-            return enqueue(() => updateFavorites(index, gid, t));
-          }),
-        );
-
-        utils.showMessage("过滤全部成功");
-      }
-    });
-
-    const divStyle = {
-      position: "fixed", // 绝对定位
-      right: "10px", // 距离左边10像素
-      bottom: "10px", // 距离顶部10像素
-      zIndex: "1000", // 确保按钮在其他元素之上
-      display: "flex",
-      flexDirection: "column",
-    };
-    const btnStyle = {
-      backgroundColor: "#007BFF", // 按钮背景颜色
-      color: "#FFFFFF", // 按钮文字颜色
-      border: "none",
-      borderRadius: "5px",
-      cursor: "pointer",
-      padding: "4px 10px",
-      marginBottom: "10px",
-    };
-
-    for (let key in divStyle) {
-      div.style[key] = divStyle[key];
-    }
-    for (let key in btnStyle) {
-      refreshBtn.style[key] = btnStyle[key];
-      toggleBtn.style[key] = btnStyle[key];
-      filterBtn.style[key] = btnStyle[key];
-      filterAllBtn.style[key] = btnStyle[key];
     }
 
-    // 添加按钮到页面
-    div.appendChild(refreshBtn);
-    div.appendChild(toggleBtn);
-    div.appendChild(filterBtn);
-    div.appendChild(filterAllBtn);
-    document.body.appendChild(div);
-    handleFilter();
+    return result;
+  }
 
-    window.addEventListener("storage", function (event) {
-      if (event.key === "isFilter") {
-        isFilter = event.newValue === "true";
-        toggleBtn.innerText = isFilter ? "点击显示" : "点击隐藏";
-        handleFilter();
-      }
-    });
-    const observer = new MutationObserver((mutationsList) => {
-      const domSet = new WeakSet();
+  // 更新收藏
+  async function updateFavorites(type, gid, t) {
+    const formData = new FormData();
+    formData.append("favcat", type);
+    formData.append("favnote", "");
+    formData.append("update", "1");
 
-      for (let mutation of mutationsList) {
-        if (
-          /^posted_\d+$/.test(mutation.target.id) &&
-          !domSet.has(mutation.target)
-        ) {
-          domSet.add(mutation.target);
-          handleFilter();
-        }
-      }
-    });
+    const response = await fetch(
+      `https://exhentai.org/gallerypopups.php?gid=${gid}&t=${t}&act=addfav`,
+      { method: "POST", body: formData },
+    );
 
-    // 开始观察目标节点
-    const targetNode = document.querySelector(".itg");
-    if (targetNode) {
-      observer.observe(targetNode, {
-        attributes: true,
-        subtree: true,
-      });
+    const domStr = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(domStr, "text/html");
+    const script = Array.from(doc.querySelectorAll("script")).find((n) =>
+      n.textContent.includes("window.close()"),
+    );
+
+    if (script) {
+      let codeStr = script.textContent;
+      codeStr = codeStr.replace(/window.opener.document/g, "window.document");
+      codeStr = codeStr.replace(/window.close\(\);/g, "");
+
+      const dynamicFunction = new Function(codeStr);
+      dynamicFunction();
     }
   }
 
-  function handleFilter() {
-    // 开始过滤
-    const list = document.querySelector("table.itg")
-      ? document.querySelectorAll("table.itg tr")
-      : document.querySelectorAll(".itg.gld .gl1t");
-
-    [...list].forEach((n) => {
-      const find = n.querySelector('[id^="posted_"]');
-
-      if (find && find.title !== "") {
-        if (alwaysFilter === find.title) {
-          n.style.display = "none";
-        } else {
-          n.style.display = isFilter ? "none" : "";
-        }
-      }
-    });
-  }
-
+  // 详情页 - 生成文件名
   async function formatFileName() {
-    // 生成文件名成
     const rule = new RegExp(`${parenthesesRule}|${squareBracketsRule}`, "g");
     let title =
       document.querySelector("#gj").innerText ||
@@ -402,205 +636,17 @@
     document.querySelector("#gd2").appendChild(button);
   }
 
-  async function setFavorites() {
-    // 快速收藏按钮组（鼠标悬停画廊封面）
-    const ulStyle = {
-      margin: "0",
-      padding: "0",
-      display: "none",
-      flexDirection: "column",
-      position: "absolute",
-      zIndex: "1000",
-    };
-    const liStyle = {
-      listStyleType: "none",
-      backgroundColor: "#007BFF",
-      color: "#FFFFFF",
-      cursor: "pointer",
-      padding: "2px 4px",
-      margin: "2px 0",
-      borderRadius: "5px",
-      textAlign: "center",
-    };
+  // ################################# 初始化 #################################
+  const pathname = window.location.pathname;
 
-    let gid = null;
-    let t = null;
-
-    const ulNode = utils.createNode(`<ul></ul>`);
-    const favdelLi = utils.createNode(`<li>取消收藏</li>`);
-    const refreshLi = utils.createNode(`<li>↻刷新</li>`);
-    const favoriteLi = await createFavoriteLi();
-
-    for (let key in ulStyle) {
-      ulNode.style[key] = ulStyle[key];
-    }
-    for (let key in liStyle) {
-      favdelLi.style[key] = liStyle[key];
-      refreshLi.style[key] = liStyle[key];
-    }
-
-    ulNode.addEventListener("mouseover", function () {
-      ulNode.style.display = "flex";
-    });
-    ulNode.addEventListener("mouseout", function () {
-      ulNode.style.display = "none";
-    });
-    favdelLi.addEventListener("click", function () {
-      if (gid && t) {
-        updateFavorites("favdel", gid, t);
-      }
-    });
-    refreshLi.addEventListener("click", async function () {
-      ulNode.style.display = "none";
-      const favoriteLi = await createFavoriteLi(true);
-
-      while (ulNode.children.length > 2) {
-        ulNode.removeChild(ulNode.firstChild);
-      }
-
-      ulNode.insertBefore(favoriteLi, ulNode.firstChild);
-      ulNode.style.display = "flex";
-    });
-
-    ulNode.appendChild(favoriteLi);
-    ulNode.appendChild(favdelLi);
-    ulNode.appendChild(refreshLi);
-    document.body.appendChild(ulNode);
-
-    // 搜索主页
-    const itgNode = document.querySelector(".itg");
-    if (itgNode) {
-      itgNode.addEventListener("mouseover", function (event) {
-        const { target } = event;
-
-        if (target.tagName === "IMG" && target.alt !== "T") {
-          const href = target.parentNode.href;
-          const groups = href.split("/");
-
-          gid = groups[groups.length - 3];
-          t = groups[groups.length - 2];
-
-          const rect = target.parentNode.parentNode.getBoundingClientRect();
-          ulNode.style.display = "flex";
-          ulNode.style.left = `${rect.left + 10 + window.scrollX}px`;
-          ulNode.style.top = `${rect.top + 10 + window.scrollY}px`; // 在 li 下方显示
-        }
-      });
-      itgNode.addEventListener("mouseout", function (e) {
-        const { target } = e;
-
-        if (target.tagName === "IMG" && !ulNode.matches(":hover")) {
-          gid = null;
-          t = null;
-
-          ulNode.style.display = "none";
-        }
-      });
-    }
-
+  if (["/", "/watched", "/popular"].includes(pathname)) {
+    // 主页
+    createFilterBtn();
+  } else if (pathname === "/favorites.php") {
+  } else if (/^\/g\/\d+\/[a-z0-9]+\/$/.test(pathname)) {
     // 详情页
-    const cover = document.querySelector("#gd1 div");
-    if (cover) {
-      const groups = location.pathname.split("/");
-      gid = groups[groups.length - 3];
-      t = groups[groups.length - 2];
-
-      cover.addEventListener("mouseover", function (event) {
-        const rect = event.target.getBoundingClientRect();
-        ulNode.style.display = "flex";
-        ulNode.style.left = `${rect.left + 10 + window.scrollX}px`;
-        ulNode.style.top = `${rect.top + 10 + window.scrollY}px`; // 在 li 下方显示
-      });
-      cover.addEventListener("mouseout", function (event) {
-        if (!ulNode.matches(":hover")) {
-          ulNode.style.display = "none";
-        }
-      });
-    }
-
-    async function createFavoriteLi(disableCache = false) {
-      const fragment = document.createDocumentFragment();
-      if (disableCache) {
-        favoriteList = await getFavorites(true);
-      }
-
-      favoriteList.forEach((n, index) => {
-        if (!/^Favorites \d$/.test(n)) {
-          const liNode = utils.createNode(`<li>${n}</li>`);
-          liNode.addEventListener("click", async function () {
-            if (gid && t) {
-              await updateFavorites(index, gid, t);
-              handleFilter();
-              utils.showMessage("收藏成功");
-            }
-          });
-
-          for (let key in liStyle) {
-            liNode.style[key] = liStyle[key];
-          }
-
-          fragment.appendChild(liNode);
-        }
-      });
-
-      return fragment;
-    }
-  }
-
-  /*
-   * 11
-   * */
-  async function getFavorites(disableCache = false) {
-    // API:获取收藏配置列表
-    let favoriteList = localStorage.getItem("favoriteList");
-
-    if (favoriteList && disableCache === false) {
-      return JSON.parse(favoriteList);
-    } else {
-      const response = await fetch("https://exhentai.org/uconfig.php");
-      const domStr = await response.text();
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(domStr, "text/html");
-
-      const list = Array.from(doc.querySelectorAll("#favsel input")).map(
-        (n) => n.value,
-      );
-
-      if (list.length) {
-        localStorage.setItem("favoriteList", JSON.stringify(list));
-        return list;
-      } else {
-        throw new Error(doc.body.innerText);
-      }
-    }
-  }
-
-  async function updateFavorites(type, gid, t) {
-    // API:更新收藏
-    const formData = new FormData();
-    formData.append("favcat", type);
-    formData.append("favnote", "");
-    formData.append("update", "1");
-
-    const response = await fetch(
-      `https://exhentai.org/gallerypopups.php?gid=${gid}&t=${t}&act=addfav`,
-      { method: "POST", body: formData },
-    );
-
-    const domStr = await response.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(domStr, "text/html");
-    const script = Array.from(doc.querySelectorAll("script")).find((n) =>
-      n.textContent.includes("window.close()"),
-    );
-
-    if (script) {
-      let codeStr = script.textContent;
-      codeStr = codeStr.replace(/window.opener.document/g, "window.document");
-      codeStr = codeStr.replace(/window.close\(\);/g, "");
-
-      const dynamicFunction = new Function(codeStr);
-      dynamicFunction();
-    }
+    await formatFileName();
+  } else if (/^\/tag\/.*$/.test(pathname)) {
+    createFilterBtn();
   }
 })();

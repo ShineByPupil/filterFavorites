@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站控制画廊已收藏显隐和黑名单
 // @namespace    http://tampermonkey.net/
-// @version      2.2.1
+// @version      2.3.0
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、控制已收藏画廊显隐 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名
 // @author       ShineByPupil
@@ -83,12 +83,27 @@
           const favoriteLi = document.createElement("li");
           favoriteLi.innerText = favoriteList[i];
           favoriteLi.title = favoriteList[i];
+          favoriteLi.classList.add(`favorite${i}`);
           favoriteLi.setAttribute("data-index", i.toString());
           ulNode.prepend(favoriteLi);
         }
       }
 
       const style = document.createElement("style");
+
+      let color = [
+        { boderColor: "#000", backgroundColor: "rgba(0, 0, 0, .5)" },
+        { boderColor: "#f00", backgroundColor: "rgba(240, 0, 0, .5)" },
+        { boderColor: "#fa0", backgroundColor: "rgba(240, 160, 0, .5)" },
+        { boderColor: "#dd0", backgroundColor: "rgba(208, 208, 0, .5)" },
+        { boderColor: "#080", backgroundColor: "rgba(0, 128, 0, .5)" },
+        { boderColor: "#9f4", backgroundColor: "rgba(144, 240, 64, .5)" },
+        { boderColor: "#4bf", backgroundColor: "rgba(64, 176, 240, .5)" },
+        { boderColor: "#00f", ackgroundColor: "rgba(0, 0, 240, .5)" },
+        { boderColor: "#508", backgroundColor: "rgba(80, 0, 128, .5)" },
+        { boderColor: "#e8e", backgroundColor: "rgba(224, 128, 224, .5)" },
+      ];
+
       style.textContent = `
           ul {
             margin: 0;
@@ -103,17 +118,37 @@
           
           li {
             list-style-type: none;
-            background-color: #007BFF;
+            border: 1px solid;
+            border-color: #4C6EF5;
+            background-color: rgba(76, 110, 245, .5);
+            transition: background-color 0.3s ease;
             color: #FFFFFF;
             cursor: pointer;
-            padding: 2px 4px;
+            padding: 1px 4px;
             margin: 2px 0;
             border-radius: 5px;
             text-align: center;
             white-space: nowrap; /* 不换行 */
             overflow: hidden; /* 隐藏溢出的内容 */
             text-overflow: ellipsis; /* 用省略号表示溢出的文本 */
+            text-shadow: 1px 1px 3px #000;
           }
+          li:hover {
+            background-color: #4C6EF5;
+          }
+          ${color
+            .map((n, i) => {
+              return `
+              .favorite${i} {
+                border-color: ${n.boderColor};
+                background-color: ${n.backgroundColor};
+              }
+              .favorite${i}:hover {
+                background-color: ${n.boderColor};
+              }
+              `;
+            })
+            .join("")}
         `;
 
       shadow.appendChild(style);
@@ -293,7 +328,7 @@
         }
         
         button {
-          background-color: #007BFF;
+          background-color: #4C6EF5;
           color: #FFFFFF;
           border: none;
           border-radius: 5px;

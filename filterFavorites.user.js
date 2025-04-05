@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站控制画廊已收藏显隐和黑名单
 // @namespace    http://tampermonkey.net/
-// @version      2.1.0
+// @version      2.2.0
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、控制已收藏画廊显隐 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名
 // @author       ShineByPupil
@@ -157,7 +157,7 @@
           } else if (index && this.gid && this.t) {
             await updateFavorites(index, this.gid, this.t);
             this.gid = this.t = null;
-            filterBtn.handleFilter();
+            filterBtn?.handleFilter();
             messageBox.show("收藏成功");
           }
         }
@@ -534,6 +534,8 @@
 
   const messageBox = document.createElement("message-box");
   document.body.appendChild(messageBox);
+  // 标签页广播
+  const channel = initBroadcastChannel();
 
   // 【过滤按钮组】
   function createFilterBtn() {
@@ -581,11 +583,11 @@
     formData.append("favnote", "");
     formData.append("update", "1");
 
+    // 发生请求
     const response = await fetch(
       `https://exhentai.org/gallerypopups.php?gid=${gid}&t=${t}&act=addfav`,
       { method: "POST", body: formData },
     );
-
     const domStr = await response.text();
     const parser = new DOMParser();
     const doc = parser.parseFromString(domStr, "text/html");
@@ -600,6 +602,8 @@
 
       const dynamicFunction = new Function(codeStr);
       dynamicFunction();
+
+      channel?.postMessage({ type: "updateFavorites", data: { codeStr } });
     }
   }
 
@@ -686,16 +690,37 @@
   }
 
   // ################################# 初始化 #################################
+
+  function initBroadcastChannel() {
+    if (typeof BroadcastChannel === "undefined") {
+      return console.error("当前浏览器不支持 BroadcastChannel");
+    }
+
+    const channel = new BroadcastChannel("filterFavorites");
+
+    channel.onmessage = function (event) {
+      const { type, data } = event.data;
+      if (type === "updateFavorites") {
+        // 更新收藏显示
+        const dynamicFunction = new Function(data.codeStr);
+        dynamicFunction();
+        // 更新过滤
+        filterBtn?.handleFilter();
+      }
+    };
+
+    return channel;
+  }
   const pathname = window.location.pathname;
 
-  if (["/", "/watched", "/popular"].includes(pathname)) {
+  if (
+    ["/", "/watched", "/popular"].includes(pathname) || // 主页
+    /^\/tag\/.*$/.test(pathname) // 标签页
+  ) {
     // 主页
     filterBtn = createFilterBtn();
-  } else if (pathname === "/favorites.php") {
   } else if (/^\/g\/\d+\/[a-z0-9]+\/$/.test(pathname)) {
     // 详情页
     await formatFileName();
-  } else if (/^\/tag\/.*$/.test(pathname)) {
-    filterBtn = createFilterBtn();
   }
 })();

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站控制画廊已收藏显隐和黑名单
 // @namespace    http://tampermonkey.net/
-// @version      2.2.0
+// @version      2.2.1
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、控制已收藏画廊显隐 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名
 // @author       ShineByPupil
@@ -492,6 +492,15 @@
   }
 
   // ################################# 变量类 #################################
+  const pathname = window.location.pathname;
+  const pageType = ["/", "/watched", "/popular"].includes(pathname)
+    ? "main"
+    : /^\/tag\/.*$/.test(pathname)
+      ? "tag"
+      : /^\/g\/\d+\/[a-z0-9]+\/$/.test(pathname)
+        ? "detail"
+        : "other";
+
   // 【文件名去除规则】
   const keyword = [
     "Vol",
@@ -603,7 +612,10 @@
       const dynamicFunction = new Function(codeStr);
       dynamicFunction();
 
-      channel?.postMessage({ type: "updateFavorites", data: { codeStr } });
+      channel?.postMessage({
+        type: "updateFavorites",
+        data: { type, gid, t, codeStr },
+      });
     }
   }
 
@@ -702,6 +714,15 @@
       const { type, data } = event.data;
       if (type === "updateFavorites") {
         // 更新收藏显示
+        if (pageType === "detail") {
+          const groups = location.pathname.split("/");
+          if (
+            groups[groups.length - 3] !== data.gid ||
+            groups[groups.length - 2] !== data.t
+          )
+            return;
+        }
+
         const dynamicFunction = new Function(data.codeStr);
         dynamicFunction();
         // 更新过滤
@@ -711,16 +732,14 @@
 
     return channel;
   }
-  const pathname = window.location.pathname;
 
-  if (
-    ["/", "/watched", "/popular"].includes(pathname) || // 主页
-    /^\/tag\/.*$/.test(pathname) // 标签页
-  ) {
-    // 主页
-    filterBtn = createFilterBtn();
-  } else if (/^\/g\/\d+\/[a-z0-9]+\/$/.test(pathname)) {
-    // 详情页
-    await formatFileName();
+  switch (pageType) {
+    case "main":
+    case "tag":
+      filterBtn = createFilterBtn();
+      break;
+    case "detail":
+      await formatFileName();
+      break;
   }
 })();

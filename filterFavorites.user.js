@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站控制画廊已收藏显隐和黑名单
 // @namespace    http://tampermonkey.net/
-// @version      2.3.4
+// @version      2.4.0
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、控制已收藏画廊显隐 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名
 // @author       ShineByPupil
@@ -743,6 +743,24 @@
     document.querySelector("#gd2").appendChild(button);
   }
 
+  // 详情页 - 快速标签查询
+  async function quickTagSearch() {
+    const taglist = document.querySelector("#taglist");
+
+    taglist &&
+      taglist.addEventListener("mousedown", function (event) {
+        if (event.button === 1 && event.target.tagName === "A") {
+          const [type, tag] = event.target.title.split(":");
+          event.preventDefault();
+
+          window.open(
+            `https://exhentai.org/?f_search=${type}:"${tag}$" l:chinese$&f_sto=on`,
+            "_blank",
+          );
+        }
+      });
+  }
+
   // ################################# 初始化 #################################
 
   function initBroadcastChannel() {
@@ -782,6 +800,7 @@
       break;
     case "detail":
       await formatFileName();
+      quickTagSearch();
       break;
   }
 })();

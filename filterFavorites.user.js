@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站控制画廊已收藏显隐和黑名单
 // @namespace    http://tampermonkey.net/
-// @version      2.4.0
+// @version      2.5.0
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、控制已收藏画廊显隐 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名
 // @author       ShineByPupil
@@ -663,6 +663,26 @@
 
   // 详情页 - 生成文件名
   async function formatFileName() {
+    const div = document.createElement("div");
+    div.style.display = "grid";
+    div.style.gridTemplateColumns = "1fr auto auto";
+    const shadowRoot = div.attachShadow({ mode: "open" });
+    shadowRoot.innerHTML = `
+      <style>
+        input {
+          text-align: center;
+        }
+        button {
+          padding: 0 16px;
+        }
+      </style>
+      
+      <input>
+      <button>复制</button>
+    `;
+    const input = shadowRoot.querySelector("input");
+    const button = shadowRoot.querySelector("button");
+
     const rule = new RegExp(`${parenthesesRule}|${squareBracketsRule}`, "g");
     let title =
       document.querySelector("#gj").innerText ||
@@ -728,19 +748,13 @@
       ),
     ].join("");
 
-    const input = document.createElement("input");
-    input.style.width = "100%";
-    input.style.textAlign = "center";
     input.value = (title + " " + tags).trim();
 
-    const button = document.createElement("button");
     button.onclick = function () {
       navigator.clipboard.writeText(input.value);
     };
-    button.innerText = "复制";
 
-    document.querySelector("#gd2").appendChild(input);
-    document.querySelector("#gd2").appendChild(button);
+    document.querySelector(".gm").appendChild(div);
   }
 
   // 详情页 - 快速标签查询

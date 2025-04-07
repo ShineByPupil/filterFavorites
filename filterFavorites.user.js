@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站控制画廊已收藏显隐和黑名单
 // @namespace    http://tampermonkey.net/
-// @version      2.6.0
+// @version      2.7.0
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、控制已收藏画廊显隐 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名
 // @author       ShineByPupil
@@ -541,7 +541,9 @@
       ? "tag"
       : /^\/g\/\d+\/[a-z0-9]+\/$/.test(pathname)
         ? "detail"
-        : "other";
+        : pathname.includes("favorites.php")
+          ? "favorites"
+          : "other";
 
   // 【文件名去除规则】
   const keyword = [
@@ -758,7 +760,7 @@
   }
 
   // 详情页 - 快速标签查询
-  async function quickTagSearch() {
+  function quickTagSearch() {
     const taglist = document.querySelector("#taglist");
 
     taglist &&
@@ -830,15 +832,78 @@
     return channel;
   }
 
+  function prefetch() {
+    // 兼容性处理：requestIdleCallback 降级方案
+    const idleCallback =
+      window.requestIdleCallback ||
+      function (cb) {
+        return setTimeout(
+          () =>
+            cb({
+              didTimeout: false, // 模拟 idle 回调对象
+              timeRemaining: () => 15, // 至少保证15ms剩余时间
+            }),
+          500,
+        ); // 延迟500ms作为降级处理
+      };
+
+    // 在空闲时段预加载下一页图片
+    idleCallback(async (deadline) => {
+      try {
+        // 兼容性检查：确保存在 nexturl 属性
+        if (!window.nexturl) {
+          return console.warn("[预加载] 没有找到 nexturl 参数");
+        }
+
+        // 获取下一页内容
+        const response = await fetch(window.nexturl);
+        if (!response.ok) throw new Error(`HTTP 错误 ${response.status}`);
+
+        // 解析HTML文档
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+
+        // 提取所有非空图片地址
+        const imageUrls = new Set( // 使用 Set 去重
+          [...doc.querySelectorAll("img[src]")]
+            .map((img) => img.src)
+            .filter((src) => src.trim().length > 0),
+        );
+
+        // 创建文档片段批量插入
+        const fragment = document.createDocumentFragment();
+        imageUrls.forEach((url) => {
+          const link = document.createElement("link");
+          link.rel = "prefetch";
+          link.href = url;
+          fragment.appendChild(link);
+        });
+
+        // 插入到<head>中触发预加载
+        document.head.appendChild(fragment);
+
+        console.log(`[预加载] 预加载了 ${imageUrls.size} 张图片`, imageUrls);
+      } catch (error) {
+        console.error("[预加载] 发生错误:", error);
+        // 可在此添加错误上报逻辑
+      }
+    });
+  }
+
   switch (pageType) {
     case "main":
     case "tag":
       filterBtn = createFilterBtn();
+      prefetch();
       break;
     case "detail":
       await formatFileName();
       quickTagSearch();
       torrentDownload();
+      break;
+    case "favorites":
+      prefetch();
       break;
   }
 })();

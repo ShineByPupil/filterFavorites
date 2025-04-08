@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强 已收藏显隐切换/黑名单/下一页预加载
 // @namespace    http://tampermonkey.net/
-// @version      2.7.1
+// @version      2.7.2
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、控制已收藏画廊显隐 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名
 // @author       ShineByPupil
@@ -228,7 +228,7 @@
         }
       });
 
-      moveTarget?.addEventListener("mouseleave", function (e) {
+      moveTarget?.addEventListener("mouseout", function (e) {
         if (favoritesBtn.ulNode.matches(":hover")) return;
         if (pageType === "main" && e.target.tagName !== "IMG") return;
         hide();

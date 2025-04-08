@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         E站控制画廊已收藏显隐和黑名单
+// @name         E站功能加强 已收藏显隐切换/黑名单/下一页预加载
 // @namespace    http://tampermonkey.net/
-// @version      2.7.0
+// @version      2.7.1
 // @license      GPL-3.0
 // @description  漫画资源e站，增加功能：1、控制已收藏画廊显隐 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名
 // @author       ShineByPupil
@@ -184,70 +184,61 @@
         }
       });
 
-      // 搜索主页，悬停封面事件
-      const itgNode = document.querySelector(".itg");
-      if (itgNode) {
-        itgNode.addEventListener("mouseover", function (event) {
-          const { target } = event;
+      const moveTarget =
+        pageType === "main"
+          ? document.querySelector(".itg")
+          : pageType === "detail"
+            ? document.querySelector("#gd1 div")
+            : null;
+      let contain = null;
 
+      const hide = () => {
+        contain = null;
+        favoritesBtn.hide();
+      };
+
+      moveTarget?.addEventListener("mouseover", function (event) {
+        let groups = null;
+
+        if (pageType === "main") {
+          const { target } = event;
           if (target.tagName === "IMG" && target.alt !== "T") {
             const A = target.closest("a");
             if (!A) return;
-            const groups = A.href.split("/");
 
-            favoritesBtn.update(
-              groups[groups.length - 3],
-              groups[groups.length - 2],
-            );
-
-            const Div = target.closest("div");
-
-            if (Div) {
-              const rect = Div.getBoundingClientRect();
-              favoritesBtn.show(
-                `${rect.left + 10 + window.scrollX}px`,
-                `${rect.top + 10 + window.scrollY}px`,
-              );
-            }
+            contain = event.target.closest("div");
+            groups = A.getAttribute("href").split("/");
           }
-        });
-        itgNode.addEventListener("mouseout", function (e) {
-          const { target } = e;
+        } else if (pageType === "detail") {
+          contain = event.target;
+          groups = location.pathname.split("/");
+        }
 
-          if (
-            target.tagName === "IMG" &&
-            !favoritesBtn.ulNode.matches(":hover")
-          ) {
-            favoritesBtn.hide();
-          }
-        });
-      }
-
-      // 详情页，悬停封面事件
-      const cover = document.querySelector("#gd1 div");
-      if (cover) {
-        cover.addEventListener("mouseover", function (event) {
-          const groups = location.pathname.split("/");
-
+        if (contain && groups) {
           favoritesBtn.update(
             groups[groups.length - 3],
             groups[groups.length - 2],
           );
-          const rect = event.target.getBoundingClientRect();
+
+          const rect = contain.getBoundingClientRect();
           favoritesBtn.show(
             `${rect.left + 10 + window.scrollX}px`,
             `${rect.top + 10 + window.scrollY}px`,
           );
-        });
-        cover.addEventListener("mouseout", function () {
-          if (!favoritesBtn.ulNode.matches(":hover")) {
-            favoritesBtn.hide();
-          }
-        });
-      }
+        }
+      });
 
+      moveTarget?.addEventListener("mouseleave", function (e) {
+        if (favoritesBtn.ulNode.matches(":hover")) return;
+        if (pageType === "main" && e.target.tagName !== "IMG") return;
+        hide();
+      });
+      favoritesBtn.ulNode.addEventListener("mouseleave", (e) => {
+        if (contain?.matches(":hover")) return;
+        hide();
+      });
       window.addEventListener("blur", () => {
-        favoritesBtn.hide();
+        hide();
       });
     }
 

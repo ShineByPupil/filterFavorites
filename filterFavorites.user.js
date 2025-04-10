@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         E站功能加强 已收藏显隐切换/黑名单/下一页预加载
+// @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.7.2
+// @version      2.7.3
 // @license      GPL-3.0
-// @description  漫画资源e站，增加功能：1、控制已收藏画廊显隐 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名
+// @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
 // @match        *://exhentai.org/*
 // @icon         https://e-hentai.org/favicon.ico
@@ -539,14 +539,15 @@
   // 【文件名去除规则】
   const keyword = [
     "Vol",
-    "COMIC",
-    "成年コミック",
+    "COMIC", // 漫画
+    "成年コミック", // 成年漫画
     "C\\d+",
     "よろず",
     "FF\\d+",
     "\\d{4}年\\d{1,2}月",
-    "コミック",
-    "オリジナル",
+    "コミック", // 漫画
+    "オリジナル", // 原创
+    "ページ欠落", // 页面缺失
     "汉化组",
     "中文",
     "汉化",
@@ -563,7 +564,9 @@
     "機翻",
     "重嵌",
     "嵌字",
-    "Decensored",
+    "翻译",
+    "Decensored", // 审查
+    "Uncensored", // 未经审查
   ];
   const parenthesesRule = "\\([^(]*(" + keyword.join("|") + ")[^(]*\\)"; // 圆括号
   const squareBracketsRule = "\\[[^[]*(" + keyword.join("|") + ")[^[]*\\]"; // 方括号
@@ -682,10 +685,11 @@
       document.querySelector("#gn").innerText;
 
     title = title
-      .replace(/[［］（）]/g, (match) => {
-        if (match === "［") {
+      // 统一替换全角括号为半角括号
+      .replace(/[［］（）【】]/g, (match) => {
+        if (match === "［" || match === "【") {
           return "[";
-        } else if (match === "］") {
+        } else if (match === "］" || match === "】") {
           return "]";
         } else if (match === "（") {
           return "(";
@@ -693,10 +697,11 @@
           return ")";
         }
       })
-      .replace(/[\/\\:*?"<>|]/g, " ")
-      .replace(rule, "")
-      .replace(/\s+/g, " ")
-      .trim();
+      .replace(/^(\[[^\]]+])(\S)/, "$1 $2")
+      .replace(/[\/\\:*?"<>|]/g, " ") // 替换文件系统非法字符为空格
+      .replace(rule, "") // 自定义过滤规则移除标签
+      .replace(/\s+/g, " ") // 合并连续空格
+      .trim(); // 去除首尾空格
 
     const tagConfigMap = await fetch("https://exhentai.org/mytags")
       .then((r) => r.text())

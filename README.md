@@ -3,7 +3,8 @@
 > 专门为exhentai设计，一些好用的快捷功能
 
 - **需要独立的个人账号（_收藏相关_）**
-- **只支持里站（_exhentai_）**
+- **表站里站都支持**
+- **如果有好的想法欢迎反馈留言**
 
 <a href="https://github.com/ShineByPupil/filterFavorites/raw/main/filterFavorites.user.js">点击此处安装</a>
 

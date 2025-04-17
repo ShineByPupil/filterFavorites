@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.7.4
+// @version      2.8.0
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
 // @match        *://exhentai.org/*
+// @match        *://e-hentai.org/*
 // @icon         https://e-hentai.org/favicon.ico
 // @grant        none
 // ==/UserScript==
@@ -158,6 +159,7 @@
             // 取消收藏
             await updateFavorites("favdel", this.gid, this.t);
             this.gid = this.t = null;
+            messageBox.show("取消收藏成功");
           } else if (target.classList.contains("refresh")) {
             // 刷新
             this.ulNode.style.display = "none";
@@ -172,6 +174,8 @@
               }
 
               this.ulNode.prepend(...this.#getFavoriteLi());
+
+              messageBox.show("刷新成功");
             });
           } else if (index && this.gid && this.t) {
             // 设置收藏
@@ -605,7 +609,7 @@
     if (favoriteList && disableCache === false) {
       result = JSON.parse(favoriteList);
     } else {
-      const response = await fetch("https://exhentai.org/uconfig.php");
+      const response = await fetch(`${location.origin}/uconfig.php`);
       const domStr = await response.text();
       const parser = new DOMParser();
       const doc = parser.parseFromString(domStr, "text/html");
@@ -634,7 +638,7 @@
 
     // 发生请求
     const response = await fetch(
-      `https://exhentai.org/gallerypopups.php?gid=${gid}&t=${t}&act=addfav`,
+      `${location.origin}/gallerypopups.php?gid=${gid}&t=${t}&act=addfav`,
       { method: "POST", body: formData },
     );
     const domStr = await response.text();
@@ -705,7 +709,7 @@
       .replace(/\s+/g, " ") // 合并连续空格
       .trim(); // 去除首尾空格
 
-    const tagConfigMap = await fetch("https://exhentai.org/mytags")
+    const tagConfigMap = await fetch(`${location.origin}/mytags`)
       .then((r) => r.text())
       .then((r) => {
         const parser = new DOMParser();
@@ -768,7 +772,7 @@
           event.preventDefault();
 
           window.open(
-            `https://exhentai.org/?f_search=${type}:"${tag}$" l:chinese$&f_sto=on`,
+            `${location.origin}/?f_search=${type}:"${tag}$" l:chinese$&f_sto=on`,
             "_blank",
           );
         }

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.8.0
+// @version      2.8.1
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -188,12 +188,11 @@
         }
       });
 
-      const moveTarget =
-        pageType === "main"
-          ? document.querySelector(".itg")
-          : pageType === "detail"
-            ? document.querySelector("#gd1 div")
-            : null;
+      const moveTarget = ["main", "favorites"].includes(pageType)
+        ? document.querySelector(".itg")
+        : pageType === "detail"
+          ? document.querySelector("#gd1 div")
+          : null;
       let contain = null;
 
       const hide = () => {
@@ -204,7 +203,7 @@
       moveTarget?.addEventListener("mouseover", function (event) {
         let groups = null;
 
-        if (pageType === "main") {
+        if (["main", "favorites"].includes(pageType)) {
           const { target } = event;
           if (target.tagName === "IMG" && target.alt !== "T") {
             const A = target.closest("a");
@@ -541,6 +540,7 @@
         : pathname.includes("favorites.php")
           ? "favorites"
           : "other";
+  console.log(pageType);
 
   // 【文件名去除规则】
   const keyword = [
@@ -581,9 +581,9 @@
   let favoriteList = await getFavorites();
   // 收藏按钮组
   const favoritesBtn = new FavoritesBtn();
+  await favoritesBtn.init();
   // 过滤按钮组
   let filterBtn = null;
-  await favoritesBtn.init();
 
   const messageBox = document.createElement("message-box");
   document.body.appendChild(messageBox);

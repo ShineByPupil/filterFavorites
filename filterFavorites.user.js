@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.8.1
+// @version      2.8.2
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -544,6 +544,7 @@
 
   // 【文件名去除规则】
   const keyword = [
+    "同人誌",
     "Vol",
     "COMIC", // 漫画
     "成年コミック", // 成年漫画
@@ -573,6 +574,8 @@
     "翻译",
     "Decensored", // 审查
     "Uncensored", // 未经审查
+    "超分辨率",
+    "カラー化", // 全彩
   ];
   const parenthesesRule = "\\([^(]*(" + keyword.join("|") + ")[^(]*\\)"; // 圆括号
   const squareBracketsRule = "\\[[^[]*(" + keyword.join("|") + ")[^[]*\\]"; // 方括号
@@ -719,6 +722,7 @@
       .then((doc) => {
         let map = new Map();
         // 没有关注和隐藏的标签（也希望显示在文件名）
+        map.set("other:full color", { weight: -9 });
         map.set("other:extraneous ads", { weight: -10 });
         map.set("other:incomplete", { weight: -11 });
 

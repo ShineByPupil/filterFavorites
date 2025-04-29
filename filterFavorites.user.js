@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.8.2
+// @version      2.8.3
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -576,6 +576,7 @@
     "Uncensored", // 未经审查
     "超分辨率",
     "カラー化", // 全彩
+    "フルカラー版",
   ];
   const parenthesesRule = "\\([^(]*(" + keyword.join("|") + ")[^(]*\\)"; // 圆括号
   const squareBracketsRule = "\\[[^[]*(" + keyword.join("|") + ")[^[]*\\]"; // 方括号
@@ -688,7 +689,6 @@
     const input = shadowRoot.querySelector("input");
     const button = shadowRoot.querySelector("button");
 
-    const rule = new RegExp(`${parenthesesRule}|${squareBracketsRule}`, "g");
     let title =
       document.querySelector("#gj").innerText ||
       document.querySelector("#gn").innerText;
@@ -706,39 +706,42 @@
           return ")";
         }
       })
-      .replace(/^(\[[^\]]+])(\S)/, "$1 $2")
+      .replace(/^(\[[^\]]+])(\S)/, "$1 $2") // 开头的[xxx]后面需要有一个空格
       .replace(/[\/\\:*?"<>|]/g, " ") // 替换文件系统非法字符为空格
-      .replace(rule, "") // 自定义过滤规则移除标签
+      .replace(new RegExp(parenthesesRule, "g"), "") // 自定义过滤规则移除标签
+      .replace(new RegExp(squareBracketsRule, "g"), "") // 自定义过滤规则移除标签
+      // 处理空格
+      .replace(/\(\s*/g, "(")
+      .replace(/\s*\)/g, ")")
+      .replace(/\[\s*/g, "[")
+      .replace(/\s*]/g, "]")
       .replace(/\s+/g, " ") // 合并连续空格
       .trim(); // 去除首尾空格
 
-    const tagConfigMap = await fetch(`${location.origin}/mytags`)
-      .then((r) => r.text())
-      .then((r) => {
-        const parser = new DOMParser();
+    // 获取用户标签配置
+    const response = await fetch(`${location.origin}/mytags`);
+    const htmlText = await response.text();
+    // 解析 HTML 文档
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlText, "text/html");
+    // 初始化标签 Map
+    const tagConfigMap = new Map([
+      // 额外增加标签(无需关注)
+      ["other:full color", { weight: -9 }], // 全彩
+      ["other:extraneous ads", { weight: -10 }], // 外部广告
+      ["other:incomplete", { weight: -11 }], // 缺页
+    ]);
+    const tagDivs = doc.querySelectorAll("#usertags_outer > div");
+    tagDivs.forEach((div) => {
+      const title = div.querySelector(".gt")?.title; // 标签名元素
+      const isWatch = div.querySelector("input[id^=tagwatch]").checked; // 是否关注
+      const [type, value] = title?.split(":") ?? [];
 
-        return parser.parseFromString(r, "text/html");
-      })
-      .then((doc) => {
-        let map = new Map();
-        // 没有关注和隐藏的标签（也希望显示在文件名）
-        map.set("other:full color", { weight: -9 });
-        map.set("other:extraneous ads", { weight: -10 });
-        map.set("other:incomplete", { weight: -11 });
-
-        [...doc.querySelectorAll("#usertags_outer>div")].forEach((n) => {
-          if (
-            n.querySelector(".gt") &&
-            n.querySelector("input[id^=tagwatch]")?.checked
-          ) {
-            map.set(n.querySelector(".gt").title, {
-              weight: parseInt(n.querySelector("[id^=tagweight]").value, 10),
-            });
-          }
-        });
-
-        return map;
-      });
+      if (title && isWatch && !["artist", "group"].includes(type)) {
+        const weight = parseInt(div.querySelector("[id^=tagweight]").value, 10);
+        tagConfigMap.set(title, { weight }); // 设置权重
+      }
+    });
 
     const tagDom = Array.from(document.querySelectorAll("#taglist a"));
 

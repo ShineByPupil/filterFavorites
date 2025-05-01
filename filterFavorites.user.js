@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.8.3
+// @version      2.8.4
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -546,6 +546,9 @@
   const keyword = [
     "同人誌",
     "Vol",
+    "コミティア",
+    "サンクリ",
+    "とら祭り",
     "COMIC", // 漫画
     "成年コミック", // 成年漫画
     "C\\d+",

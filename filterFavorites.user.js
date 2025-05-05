@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.8.4
+// @version      2.8.5
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -14,7 +14,7 @@
 (async function () {
   "use strict";
 
-  // ################################# 函数类 #################################
+  // 消息提示
   class MessageBox extends HTMLElement {
     constructor() {
       super();
@@ -58,11 +58,14 @@
   }
   customElements.define("message-box", MessageBox);
 
+  // 快速收藏
   class FavoritesBtn {
     constructor() {
       this.ulNode = null;
       this.gid = null;
       this.t = null;
+
+      this.init();
     }
 
     async init() {
@@ -278,6 +281,7 @@
     }
   }
 
+  // 过滤按钮
   class FilterBtn {
     constructor() {
       this.isFilter = localStorage.getItem("isFilter") === "true";
@@ -292,6 +296,8 @@
 
       this.favoriteCount = 0;
       this.filterCount = 0;
+
+      this.init();
     }
 
     async init() {
@@ -529,7 +535,7 @@
     }
   }
 
-  // ################################# 变量类 #################################
+  // 页面类型
   const pathname = window.location.pathname;
   const pageType = ["/", "/watched", "/popular"].includes(pathname)
     ? "main"
@@ -540,76 +546,17 @@
         : pathname.includes("favorites.php")
           ? "favorites"
           : "other";
-  console.log(pageType);
 
-  // 【文件名去除规则】
-  const keyword = [
-    "同人誌",
-    "Vol",
-    "コミティア",
-    "サンクリ",
-    "とら祭り",
-    "COMIC", // 漫画
-    "成年コミック", // 成年漫画
-    "C\\d+",
-    "よろず",
-    "FF\\d+",
-    "\\d{4}年\\d{1,2}月",
-    "コミック", // 漫画
-    "オリジナル", // 原创
-    "ページ欠落", // 页面缺失
-    "汉化组",
-    "中文",
-    "汉化",
-    "漢化",
-    "翻訳",
-    "Chinese",
-    "chinese",
-    "CHINESE",
-    "中国語",
-    "無修正",
-    "DL版",
-    "渣翻",
-    "机翻",
-    "機翻",
-    "重嵌",
-    "嵌字",
-    "翻译",
-    "Decensored", // 审查
-    "Uncensored", // 未经审查
-    "超分辨率",
-    "カラー化", // 全彩
-    "フルカラー版",
-  ];
-  const parenthesesRule = "\\([^(]*(" + keyword.join("|") + ")[^(]*\\)"; // 圆括号
-  const squareBracketsRule = "\\[[^[]*(" + keyword.join("|") + ")[^[]*\\]"; // 方括号
-
-  // 个人收藏信息
-  let favoriteList = await getFavorites();
-  // 收藏按钮组
-  const favoritesBtn = new FavoritesBtn();
-  await favoritesBtn.init();
-  // 过滤按钮组
-  let filterBtn = null;
+  let favoriteList = await getFavorites(); // 获取收藏配置
+  const favoritesBtn = new FavoritesBtn(); // 收藏按钮组
+  let filterBtn = null; // 过滤按钮组
+  const channel = initBroadcastChannel(); // 标签页广播
 
   const messageBox = document.createElement("message-box");
   document.body.appendChild(messageBox);
-  // 标签页广播
-  const channel = initBroadcastChannel();
 
-  // 【过滤按钮组】
-  function createFilterBtn() {
-    const filterBtn = new FilterBtn();
-    filterBtn.init();
-
-    return filterBtn;
-  }
-
-  // ################################# API相关 #################################
-
-  // 获取收藏
+  // API - 获取收藏配置
   async function getFavorites(disableCache = false) {
-    // API:获取收藏配置列表
     let favoriteList = localStorage.getItem("favoriteList");
     let result = null;
 
@@ -636,7 +583,7 @@
     return result;
   }
 
-  // 更新收藏
+  // API - 更新收藏
   async function updateFavorites(type, gid, t) {
     const formData = new FormData();
     formData.append("favcat", type);
@@ -670,8 +617,50 @@
     }
   }
 
-  // 详情页 - 生成文件名
+  // 生成文件名（详情页）
   async function formatFileName() {
+    // 文件名去除规则
+    const keyword = [
+      "同人誌",
+      "Vol",
+      "コミティア",
+      "サンクリ",
+      "とら祭り",
+      "COMIC", // 漫画
+      "成年コミック", // 成年漫画
+      "C\\d+",
+      "よろず",
+      "FF\\d+",
+      "\\d{4}年\\d{1,2}月",
+      "コミック", // 漫画
+      "オリジナル", // 原创
+      "ページ欠落", // 页面缺失
+      "汉化组",
+      "中文",
+      "汉化",
+      "漢化",
+      "翻訳",
+      "Chinese",
+      "chinese",
+      "CHINESE",
+      "中国語",
+      "無修正",
+      "DL版",
+      "渣翻",
+      "机翻",
+      "機翻",
+      "重嵌",
+      "嵌字",
+      "翻译",
+      "Decensored", // 审查
+      "Uncensored", // 未经审查
+      "超分辨率",
+      "カラー化", // 全彩
+      "フルカラー版",
+    ];
+    const parenthesesRule = "\\([^(]*(" + keyword.join("|") + ")[^(]*\\)"; // 圆括号
+    const squareBracketsRule = "\\[[^[]*(" + keyword.join("|") + ")[^[]*\\]"; // 方括号
+
     const div = document.createElement("div");
     div.style.display = "grid";
     div.style.gridTemplateColumns = "1fr auto auto";
@@ -771,12 +760,12 @@
     document.querySelector(".gm").appendChild(div);
   }
 
-  // 详情页 - 快速标签查询
+  // 鼠标中键标签，快速查询（详情页）
   function quickTagSearch() {
-    const taglist = document.querySelector("#taglist");
+    const tagList = document.querySelector("#taglist");
 
-    taglist &&
-      taglist.addEventListener("mousedown", function (event) {
+    tagList &&
+      tagList.addEventListener("mousedown", function (event) {
         if (event.button === 1 && event.target.tagName === "A") {
           const [type, tag] = event.target.title.split(":");
           event.preventDefault();
@@ -789,7 +778,7 @@
       });
   }
 
-  // 详情页 - 种子下载支持鼠标中键
+  // 鼠标中键种子下载（详情页）
   function torrentDownload() {
     const div = document.querySelector(".gm #gmid #gd5");
     div &&
@@ -813,7 +802,7 @@
       });
   }
 
-  // 标签页跨上下文通信
+  // 广播频道 - 跨标签页通信，同步状态
   function initBroadcastChannel() {
     if (typeof BroadcastChannel === "undefined") {
       return console.error("当前浏览器不支持 BroadcastChannel");
@@ -844,6 +833,7 @@
     return channel;
   }
 
+  // 预获取下一页资源
   function prefetch() {
     // 兼容性处理：requestIdleCallback 降级方案
     const idleCallback =
@@ -906,7 +896,7 @@
   switch (pageType) {
     case "main":
     case "tag":
-      filterBtn = createFilterBtn();
+      filterBtn = new FilterBtn();
       prefetch();
       break;
     case "detail":

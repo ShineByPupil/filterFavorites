@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.8.5
+// @version      2.9.0
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -13,6 +13,64 @@
 
 (async function () {
   "use strict";
+
+  // 页面类型
+  const pathname = window.location.pathname;
+  const pageType = ["/", "/watched", "/popular"].includes(pathname)
+    ? "main"
+    : /^\/tag\/.*$/.test(pathname)
+      ? "tag"
+      : /^\/g\/\d+\/[a-z0-9]+\/$/.test(pathname)
+        ? "detail"
+        : pathname.includes("favorites.php")
+          ? "favorites"
+          : "other";
+  const inlineType = ["main", "tag"].includes(pageType)
+    ? document.querySelector("select")?.value
+    : null;
+  const commonStyle = {
+    button: `
+      button {
+        background-color: #4C6EF5;
+        color: #FFFFFF;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        padding: 4px 10px;
+        text-align: center;
+        outline: none;
+      } 
+    `,
+  };
+  // 处理并发请求
+  const enqueue = (function (activeSize = 5) {
+    const activeSet = new Set();
+    const waitArr = [];
+    const runPromise = function (promise) {
+      const p = promise().finally(() => {
+        activeSet.delete(p);
+
+        if (waitArr.length > 0) {
+          runPromise(waitArr.shift());
+        }
+      });
+      activeSet.add(p);
+    };
+
+    return function (promise) {
+      return new Promise((resolve, reject) => {
+        const wrappedPromise = () => {
+          return promise().then(resolve).catch(reject);
+        };
+
+        if (activeSet.size >= activeSize) {
+          waitArr.push(wrappedPromise);
+        } else {
+          runPromise(wrappedPromise);
+        }
+      });
+    };
+  })();
 
   // 消息提示
   class MessageBox extends HTMLElement {
@@ -34,7 +92,7 @@
             color: #000000; /* 深色文本 */
             padding: 10px 20px;
             border-radius: 5px;
-            z-index: 1000;
+            z-index: 100;
             display: none; /* 初始隐藏 */
             transition: opacity 0.3s ease;
             opacity: 1;
@@ -58,6 +116,118 @@
   }
   customElements.define("message-box", MessageBox);
 
+  class SwitchToggle extends HTMLElement {
+    static get observedAttributes() {
+      return ["checked", "disabled"];
+    }
+
+    constructor() {
+      super();
+      const shadow = this.attachShadow({ mode: "open" });
+      shadow.innerHTML = `
+        <div class="track" tabindex="0" role="switch">
+          <div class="thumb"></div>
+        </div>
+        
+        <style>
+          :host {
+            display: inline-block;
+            aspect-ratio: 2/1;
+            height: 20px;
+          }
+          .track {
+            width: 100%;
+            height: 100%;
+            background: #ccc;
+            border-radius: 14px;
+            position: relative;
+            transition: background .3s;
+            cursor: pointer;
+            outline: none;
+          }
+          .thumb {
+            aspect-ratio: 1/1;
+            height: calc(100% - 4px);
+            background: #fff;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: transform .3s;
+          }
+          :host([checked]) .track {
+            background: #4C6EF5;
+          }
+          :host([checked]) .thumb {
+            transform: translateX(calc(100% + 4px));
+          }
+        </style>
+       
+    `;
+
+      this.$track = shadow.querySelector(".track");
+      this.$track.addEventListener("click", () => this.toggle());
+      this.$track.addEventListener("keydown", (e) => {
+        if ((e.key === " " || e.key === "Enter") && !this.disabled) {
+          e.preventDefault();
+          this.toggle();
+        }
+      });
+    }
+
+    connectedCallback() {
+      this._upgrade("checked");
+      this._upgrade("disabled");
+      this.$track.tabIndex = this.disabled ? -1 : 0;
+    }
+
+    attributeChangedCallback(name, oldValue, newValue) {
+      if (name === "checked" && oldValue !== newValue) {
+        this.dispatchEvent(
+          new CustomEvent("change", {
+            detail: { oldValue, newValue },
+          }),
+        );
+      }
+      if (name === "disabled") {
+        this.$track.tabIndex = this.disabled ? -1 : 0;
+      }
+    }
+
+    // 属性反射
+    get checked() {
+      return this.hasAttribute("checked");
+    }
+    set checked(val) {
+      val ? this.setAttribute("checked", "") : this.removeAttribute("checked");
+    }
+
+    get disabled() {
+      return this.hasAttribute("disabled");
+    }
+    set disabled(val) {
+      val
+        ? this.setAttribute("disabled", "")
+        : this.removeAttribute("disabled");
+    }
+
+    // 切换方法
+    toggle() {
+      if (this.disabled) return;
+      this.checked = !this.checked;
+    }
+
+    // 升级已有属性
+    _upgrade(prop) {
+      if (this.hasOwnProperty(prop)) {
+        const val = this[prop];
+        delete this[prop];
+        this[prop] = val;
+      }
+    }
+  }
+  customElements.define("switch-toggle", SwitchToggle);
+
   // 快速收藏
   class FavoritesBtn {
     constructor() {
@@ -75,6 +245,7 @@
 
     async initRender() {
       const div = document.createElement("div");
+      div.dataset.type = "favoritesBtn";
       const shadow = div.attachShadow({ mode: "open" });
       const ulNode = (this.ulNode = document.createElement("ul"));
       ulNode.innerHTML = `
@@ -106,7 +277,7 @@
             display: none;
             flex-direction: column;
             position: absolute;
-            z-index: 1000;
+            z-index: 100;
             min-width: 80px;
             max-width: 130px;
           }
@@ -309,72 +480,67 @@
 
     initRender() {
       const div = document.createElement("div");
+      div.dataset.type = "filterBtn";
       const shadow = div.attachShadow({ mode: "open" });
 
       shadow.innerHTML = `
           <div>
-            <button class="refresh">↻刷新</button>
+            <button class="configBtn">⚙️ 设置</button>
+            <button class="refresh">↻ 刷新</button>
             <button class="toggle">${this.isFilter ? "点击显示" : "点击隐藏"}</button>
             <button class="filter">总是过滤</button>
             <button class="filterAll ${!this.alwaysFilter ? "disabled" : ""}">过滤全部</button>
+            
             <sup class="favoriteCount"></sup>
             <sup class="filterCount"></sup>
           </div>
+          
+          <style>
+            div {
+              position: fixed;
+              gap: 6px;
+              right: 15px;
+              bottom: 15px;
+              z-index: 100;
+              display: flex;
+              flex-direction: column;
+            }
+            
+            ${commonStyle.button}
+            
+            button.disabled {
+              background-color: #C0C4CC;
+              cursor: not-allowed;
+            }
+            
+            sup {
+              position: absolute;
+              right: 0;
+              transform: translateX(50%);
+              background-color: #f56c6c;
+              border-radius: 10px;
+              padding: 0 4px;
+              display: none;
+              color: #FFFFFF;
+            }
+            
+            sup.favoriteCount {
+              top: 27px;
+            }
+              sup.filterCount {
+              top: 60px;
+            }
+          </style>
         `;
 
-      const style = document.createElement("style");
-      style.textContent = `
-        div {
-          position: fixed;
-          gap: 6px;
-          right: 15px;
-          bottom: 15px;
-          z-index: 1000;
-          display: flex;
-          flex-direction: column;
-        }
-        
-        button {
-          background-color: #4C6EF5;
-          color: #FFFFFF;
-          border: none;
-          border-radius: 5px;
-          cursor: pointer;
-          padding: 4px 10px;
-          text-align: center;
-        }
-        
-        button.disabled {
-          background-color: #C0C4CC;
-          cursor: not-allowed;
-        }
-        
-        sup {
-          position: absolute;
-          right: 0;
-          transform: translateX(50%);
-          background-color: #f56c6c;
-          border-radius: 10px;
-          padding: 0 4px;
-          display: none;
-          color: #FFFFFF;
-        }
-        
-        sup.favoriteCount {
-          top: 27px;
-        }
-          sup.filterCount {
-          top: 60px;
-        }
-      `;
-
-      shadow.appendChild(style);
       document.body.appendChild(div);
 
       this.refreshBtn = shadow.querySelector(".refresh");
       this.toggleBtn = shadow.querySelector(".toggle");
       this.filterBtn = shadow.querySelector(".filter");
       this.filterAllBtn = shadow.querySelector(".filterAll");
+      this.configBtn = shadow.querySelector(".configBtn");
+
       this.favoriteSup = shadow.querySelector(".favoriteCount");
       this.filterSup = shadow.querySelector(".filterCount");
     }
@@ -420,36 +586,6 @@
             return { gid, t };
           });
 
-        // 处理并发请求
-        const enqueue = (function (activeSize = 5) {
-          const activeSet = new Set();
-          const waitArr = [];
-          const runPromise = function (promise) {
-            const p = promise().finally(() => {
-              activeSet.delete(p);
-
-              if (waitArr.length > 0) {
-                runPromise(waitArr.shift());
-              }
-            });
-            activeSet.add(p);
-          };
-
-          return function (promise) {
-            return new Promise((resolve, reject) => {
-              const wrappedPromise = () => {
-                return promise().then(resolve).catch(reject);
-              };
-
-              if (activeSet.size >= activeSize) {
-                waitArr.push(wrappedPromise);
-              } else {
-                runPromise(wrappedPromise);
-              }
-            });
-          };
-        })();
-
         await Promise.all(
           list.map(({ gid, t }) => {
             return enqueue(() => updateFavorites(index, gid, t));
@@ -458,6 +594,7 @@
 
         messageBox.show("过滤全部成功");
       });
+      this.configBtn.addEventListener("click", () => configDialog?.show());
 
       window.addEventListener("storage", (e) => {
         if (e.key === "isFilter") {
@@ -501,11 +638,14 @@
       this.filterSup.style.display = "";
       this.favoriteCount = this.filterCount = 0;
 
-      const list = document.querySelector("table.itg")
-        ? document.querySelectorAll("table.itg tr")
-        : document.querySelectorAll(".itg.gld .gl1t");
+      const list =
+        inlineType === "e"
+          ? document.querySelectorAll("table.itg >tbody >tr")
+          : inlineType === "t"
+            ? document.querySelectorAll(".itg.gld .gl1t")
+            : [];
 
-      [...list].forEach((n) => {
+      list.forEach((n) => {
         // 收藏状态：title 收藏夹名称，若空为未收藏
         const find = n.querySelector('[id^="posted_"]');
 
@@ -535,22 +675,201 @@
     }
   }
 
-  // 页面类型
-  const pathname = window.location.pathname;
-  const pageType = ["/", "/watched", "/popular"].includes(pathname)
-    ? "main"
-    : /^\/tag\/.*$/.test(pathname)
-      ? "tag"
-      : /^\/g\/\d+\/[a-z0-9]+\/$/.test(pathname)
-        ? "detail"
-        : pathname.includes("favorites.php")
-          ? "favorites"
-          : "other";
+  class ConfigDialog {
+    // 详情信息缓存
+    detailInfo = new Map();
+    button = null;
+    isShowDetail = localStorage.getItem("isShowDetail") === "true";
+
+    constructor() {
+      this.init();
+    }
+
+    init() {
+      this.initRender();
+      this.initEvent();
+
+      this.isShowDetail && this.toggleDetail(this.isShowDetail);
+    }
+
+    initRender() {
+      const div = document.createElement("div");
+      div.dataset.type = "configDialog";
+      const shadow = div.attachShadow({ mode: "open" });
+      shadow.innerHTML = `
+        <div class="config">
+          <div class="config__content">
+            <p class="title">设置</p>
+            <hr>
+            <p>
+              <switch-toggle
+                ${this.isShowDetail ? "checked" : ""}
+                class="switch__showDetail"
+              ></switch-toggle>
+              <span>是否显示画廊详情信息（收藏数、评分信息）</span>
+            </p>
+          </div>
+          
+          <button class="config__close">✕</button>
+          <div class="config__mask"></div>
+        </div>
+        
+        <style>
+          .config {
+            display: none;
+            color: #fff;
+            font-size: 16px;
+          }
+          
+          .config__content {
+            min-width: 500px;
+            position: fixed;
+            z-index: 300;
+            left: 50%;
+            top: 20vh;
+            transform: translateX(-50%);
+            padding: 20px;
+          }
+          .config__content .title {
+            font-size: 26px;
+          }
+          .config__content hr {
+           margin: 0 -20px;
+          }
+          .config__content p:not(.title) {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+          }
+          
+          .config__close {
+            width: 30px;
+            height: 30px;
+            background: transparent;
+            position: fixed;
+            z-index: 300;
+            top: 30px;
+            right: 30px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            font-weight: bold;
+            cursor: pointer;
+          }
+          .config__mask {
+            position: fixed;
+            z-index: 200;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+          }
+        </style>
+      `;
+
+      this.config = shadow.querySelector(".config");
+      this.closeBtn = shadow.querySelector(".config__close");
+      this.switch__showDetail = shadow.querySelector(".switch__showDetail");
+      document.body.appendChild(div);
+    }
+    initEvent() {
+      const close = () => (this.config.style.display = "");
+      this.closeBtn.addEventListener("click", close);
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") close();
+      });
+      this.switch__showDetail.addEventListener("change", (event) => {
+        console.log("event:", event);
+        localStorage.setItem("isShowDetail", this.switch__showDetail.checked);
+        this.toggleDetail(this.switch__showDetail.checked);
+
+        channel?.postMessage({
+          type: "toggleDetail",
+          data: this.switch__showDetail.checked,
+        });
+      });
+    }
+    // 打开设置
+    show() {
+      this.config.style.display = "block";
+    }
+    // 切换详情信息
+    async toggleDetail(isShowDetail) {
+      const getDetailInfo = async (url) => {
+        if (this.detailInfo.has(url)) {
+          return this.detailInfo.get(url);
+        }
+
+        const response = await fetch(url);
+        const domStr = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(domStr, "text/html");
+
+        let favcount = doc.querySelector("#favcount")?.innerText;
+        favcount = favcount.match(/\d*/)[0];
+
+        let rating_count = doc.querySelector("#rating_count")?.innerText;
+
+        let rating_label = doc.querySelector("#rating_label")?.innerText;
+        rating_label = rating_label.match(/[\d.]+/)[0];
+
+        const info = { favcount, rating_count, rating_label };
+        this.detailInfo.set(url, info);
+
+        return info;
+      };
+
+      if (isShowDetail) {
+        const list =
+          inlineType === "e"
+            ? document.querySelectorAll("table.itg >tbody >tr")
+            : inlineType === "t"
+              ? document.querySelectorAll(".itg.gld .gl1t")
+              : [];
+        const alwaysFilter = localStorage.getItem("alwaysFilter") || "";
+
+        for (let i = 0, length = list.length; i < length; i++) {
+          const item = list[i];
+          const find = item.querySelector('[id^="posted_"]');
+
+          if (!alwaysFilter || find?.title !== alwaysFilter) {
+            const url = item
+              .querySelector('a[href^="https://exhentai.org/g/"]')
+              ?.getAttribute("href");
+
+            enqueue(() => getDetailInfo(url)).then((info) => {
+              const div = document.createElement("div");
+              div.className = "detailInfo";
+              const shadow = div.attachShadow({ mode: "open" });
+
+              shadow.innerHTML = `
+                <span>收藏数：${info.favcount}</span>
+                <span>评分：${info.rating_label}(${info.rating_count})</span>
+                
+                <style>
+                  :host {
+                    display: flex;
+                    justify-content: space-evenly;
+                    padding-top: 10px;
+                  }
+                </style>
+              `;
+              item.querySelector(".gl3e")?.appendChild(div) ||
+                item.appendChild(div);
+            });
+          }
+        }
+      } else {
+        document.querySelectorAll(".detailInfo").forEach((n) => n.remove());
+      }
+    }
+  }
 
   let favoriteList = await getFavorites(); // 获取收藏配置
   const favoritesBtn = new FavoritesBtn(); // 收藏按钮组
   let filterBtn = null; // 过滤按钮组
   const channel = initBroadcastChannel(); // 标签页广播
+  const configDialog = new ConfigDialog();
 
   const messageBox = document.createElement("message-box");
   document.body.appendChild(messageBox);
@@ -827,6 +1146,9 @@
         dynamicFunction();
         // 更新过滤
         filterBtn?.handleFilter();
+      } else if (type === "toggleDetail") {
+        // configDialog?.toggleDetail(data);
+        configDialog.switch__showDetail.checked = data;
       }
     };
 

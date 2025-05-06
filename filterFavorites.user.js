@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.9.0
+// @version      2.9.1
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -26,7 +26,7 @@
           ? "favorites"
           : "other";
   const inlineType = ["main", "tag"].includes(pageType)
-    ? document.querySelector("select")?.value
+    ? document.querySelector("select[onchange]")?.value
     : null;
   const commonStyle = {
     button: `
@@ -525,10 +525,10 @@
             }
             
             sup.favoriteCount {
-              top: 27px;
+              bottom: 89px;
             }
-              sup.filterCount {
-              top: 60px;
+            sup.filterCount {
+             bottom: 55px;
             }
           </style>
         `;

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.9.1
+// @version      2.10.0
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -14,6 +14,10 @@
 (async function () {
   "use strict";
 
+  const FavoriteName = Symbol("FavoriteName");
+  const IsFilter = Symbol("IsFilter");
+  const URL = Symbol("URL");
+
   // 页面类型
   const pathname = window.location.pathname;
   const pageType = ["/", "/watched", "/popular"].includes(pathname)
@@ -24,11 +28,23 @@
         ? "detail"
         : pathname.includes("favorites.php")
           ? "favorites"
-          : "other";
+          : pathname.includes("mytags")
+            ? "mytags"
+            : "other";
+
   const inlineType = ["main", "tag"].includes(pageType)
     ? document.querySelector("select[onchange]")?.value
     : null;
   const commonStyle = {
+    input: `
+      input {
+        color: #f1f1f1;
+        background-color: #34353b;
+        border: 2px solid #8d8d8d;
+        border-radius: 3px;
+        outline: none;
+      }
+    `,
     button: `
       button {
         background-color: #4C6EF5;
@@ -183,9 +199,11 @@
 
     attributeChangedCallback(name, oldValue, newValue) {
       if (name === "checked" && oldValue !== newValue) {
+        const oldChecked = oldValue !== null;
+        const newChecked = newValue !== null;
         this.dispatchEvent(
           new CustomEvent("change", {
-            detail: { oldValue, newValue },
+            detail: { value: newChecked, oldValue: oldChecked },
           }),
         );
       }
@@ -638,30 +656,21 @@
       this.filterSup.style.display = "";
       this.favoriteCount = this.filterCount = 0;
 
-      const list =
-        inlineType === "e"
-          ? document.querySelectorAll("table.itg >tbody >tr")
-          : inlineType === "t"
-            ? document.querySelectorAll(".itg.gld .gl1t")
-            : [];
+      const list = getList();
 
       list.forEach((n) => {
-        // 收藏状态：title 收藏夹名称，若空为未收藏
-        const find = n.querySelector('[id^="posted_"]');
-
-        if (find && find.title !== "") {
-          if (this.alwaysFilter === find.title) {
-            n.style.display = "none";
-            this.filterCount++;
-          } else {
-            n.style.display = this.isFilter ? "none" : "";
-            this.favoriteCount++;
-          }
+        if (n[IsFilter]) {
+          this.filterCount++;
+          n.style.display = "none";
+        } else if (n[FavoriteName]) {
+          this.favoriteCount++;
+          n.style.display = this.isFilter ? "none" : "";
         } else {
           n.style.display = "";
         }
       });
 
+      // 更新 count 统计数据
       if (this.favoriteCount && this.isFilter) {
         this.favoriteSup.innerText =
           this.favoriteCount > 99 ? "99+" : this.favoriteCount;
@@ -675,11 +684,16 @@
     }
   }
 
+  // 设置
   class ConfigDialog {
     // 详情信息缓存
     detailInfo = new Map();
     button = null;
-    isShowDetail = localStorage.getItem("isShowDetail") === "true";
+    detailBitFlags = Number(localStorage.getItem("test") || 0);
+
+    isShowDetail = (this.detailBitFlags & (1 << 0)) !== 0;
+    isShowDetailCount = (this.detailBitFlags & (1 << 1)) !== 0;
+    isShowDetailTags = (this.detailBitFlags & (1 << 2)) !== 0;
 
     constructor() {
       this.init();
@@ -689,7 +703,8 @@
       this.initRender();
       this.initEvent();
 
-      this.isShowDetail && this.toggleDetail(this.isShowDetail);
+      this.isShowDetailCount && this.toggleDetail(this.isShowDetailCount);
+      this.isShowDetailTags && this.mergeTags(this.isShowDetailTags);
     }
 
     initRender() {
@@ -699,14 +714,28 @@
       shadow.innerHTML = `
         <div class="config">
           <div class="config__content">
-            <p class="title">设置</p>
+            <div class="title">设置</div>
             <hr>
             <p>
               <switch-toggle
                 ${this.isShowDetail ? "checked" : ""}
                 class="switch__showDetail"
               ></switch-toggle>
-              <span>是否显示画廊详情信息（收藏数、评分信息）</span>
+              <span>是否显示画廊详情信息</span>
+            </p>
+            <p class="level2" style="display: ${this.isShowDetail ? "" : "none"}">
+              <switch-toggle
+                ${this.isShowDetailCount ? "checked" : ""}
+                class="switch__count"
+              ></switch-toggle>
+              <span>是否显示收藏数、评分信息</span>
+            </p>
+            <p class="level2" style="display: ${this.isShowDetail ? "" : "none"}">
+             <switch-toggle
+              ${this.isShowDetailTags ? "checked" : ""}
+                class="switch__tags"
+              ></switch-toggle>
+              <span>是否合并关注标签（详情页更完整）</span>
             </p>
           </div>
           
@@ -736,10 +765,13 @@
           .config__content hr {
            margin: 0 -20px;
           }
-          .config__content p:not(.title) {
+          .config__content p {
             display: flex;
             align-items: center;
             gap: 10px;
+          }
+          .config__content p.level2 {
+            margin-left: 50px;
           }
           
           .config__close {
@@ -770,6 +802,9 @@
       this.config = shadow.querySelector(".config");
       this.closeBtn = shadow.querySelector(".config__close");
       this.switch__showDetail = shadow.querySelector(".switch__showDetail");
+      this.switch__count = shadow.querySelector(".switch__count");
+      this.switch__tags = shadow.querySelector(".switch__tags");
+
       document.body.appendChild(div);
     }
     initEvent() {
@@ -778,71 +813,130 @@
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") close();
       });
+      // 是否显示画廊详情信息
       this.switch__showDetail.addEventListener("change", (event) => {
-        console.log("event:", event);
-        localStorage.setItem("isShowDetail", this.switch__showDetail.checked);
-        this.toggleDetail(this.switch__showDetail.checked);
+        const { value } = event.detail;
+        this.isShowDetail = value;
 
-        channel?.postMessage({
-          type: "toggleDetail",
-          data: this.switch__showDetail.checked,
-        });
+        if (value) {
+          this.switch__count.parentElement.style.display = "flex";
+          this.switch__tags.parentElement.style.display = "flex";
+        } else {
+          this.switch__count.parentElement.style.display = "none";
+          this.switch__tags.parentElement.style.display = "none";
+          this.switch__count.removeAttribute("checked");
+          this.switch__tags.removeAttribute("checked");
+        }
+
+        this.updateDetailBitFlags();
+      });
+
+      // 是否显示收藏数、评分信息
+      this.switch__count.addEventListener("change", (event) => {
+        const { value } = event.detail;
+        this.isShowDetailCount = value;
+
+        this.toggleDetail(value);
+        this.updateDetailBitFlags();
+      });
+
+      // 是否合并关注标签
+      this.switch__tags.addEventListener("change", (event) => {
+        const { value } = event.detail;
+        this.isShowDetailTags = value;
+
+        this.mergeTags(value);
+        this.updateDetailBitFlags();
       });
     }
     // 打开设置
     show() {
       this.config.style.display = "block";
     }
+
+    // 更新位旗元标
+    updateDetailBitFlags() {
+      localStorage.setItem(
+        "test",
+        (
+          (this.isShowDetailTags << 2) |
+          (this.isShowDetailCount << 1) |
+          this.isShowDetail
+        ).toString(),
+      );
+
+      channel?.postMessage({
+        type: "toggleDetail",
+        data: {
+          isShowDetail: this.isShowDetail,
+          isShowDetailCount: this.isShowDetailCount,
+          isShowDetailTags: this.isShowDetailTags,
+        },
+      });
+    }
+    // 广播更新状态
+    handleChannel(data) {
+      const { isShowDetail, isShowDetailCount, isShowDetailTags } = data;
+
+      isShowDetail
+        ? this.switch__showDetail.setAttribute("checked", "")
+        : this.switch__showDetail.removeAttribute("checked");
+      isShowDetailCount
+        ? this.switch__count.setAttribute("checked", "")
+        : this.switch__count.removeAttribute("checked");
+      isShowDetailTags
+        ? this.switch__tags.setAttribute("checked", "")
+        : this.switch__tags.removeAttribute("checked");
+    }
+    // 获取详情页信息
+    async getDetailInfo(url) {
+      if (this.detailInfo.has(url)) {
+        return this.detailInfo.get(url);
+      }
+
+      const response = await fetch(url);
+      const domStr = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(domStr, "text/html");
+
+      let favcount = doc.querySelector("#favcount")?.innerText;
+      favcount = favcount.match(/\d*/)[0];
+
+      let rating_count = doc.querySelector("#rating_count")?.innerText;
+
+      let rating_label = doc.querySelector("#rating_label")?.innerText;
+      rating_label = rating_label.match(/[\d.]+/)[0];
+
+      // 标签配置
+      const tagConfigMap = await getTags();
+      // 详情标签信息
+      let tagList = Array.from(doc.querySelectorAll("#taglist div[id]"))
+        .map((n) => n.id.replace("td_", ""))
+        .filter((n) => tagConfigMap.has(n));
+
+      const info = { favcount, rating_count, rating_label, tagList };
+      this.detailInfo.set(url, info);
+
+      return info;
+    }
+
     // 切换详情信息
-    async toggleDetail(isShowDetail) {
-      const getDetailInfo = async (url) => {
-        if (this.detailInfo.has(url)) {
-          return this.detailInfo.get(url);
-        }
+    toggleDetail(isChecked) {
+      if (pageType !== "main") return;
 
-        const response = await fetch(url);
-        const domStr = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(domStr, "text/html");
+      if (isChecked) {
+        const list = getList();
 
-        let favcount = doc.querySelector("#favcount")?.innerText;
-        favcount = favcount.match(/\d*/)[0];
+        for (const n of list) {
+          if (n[IsFilter]) continue;
 
-        let rating_count = doc.querySelector("#rating_count")?.innerText;
+          enqueue(() => this.getDetailInfo(n[URL])).then((info) => {
+            // 5 - 将详细页信息插入文档
+            const div = document.createElement("div");
+            div.className = "detailInfo";
+            const shadow = div.attachShadow({ mode: "open" });
 
-        let rating_label = doc.querySelector("#rating_label")?.innerText;
-        rating_label = rating_label.match(/[\d.]+/)[0];
-
-        const info = { favcount, rating_count, rating_label };
-        this.detailInfo.set(url, info);
-
-        return info;
-      };
-
-      if (isShowDetail) {
-        const list =
-          inlineType === "e"
-            ? document.querySelectorAll("table.itg >tbody >tr")
-            : inlineType === "t"
-              ? document.querySelectorAll(".itg.gld .gl1t")
-              : [];
-        const alwaysFilter = localStorage.getItem("alwaysFilter") || "";
-
-        for (let i = 0, length = list.length; i < length; i++) {
-          const item = list[i];
-          const find = item.querySelector('[id^="posted_"]');
-
-          if (!alwaysFilter || find?.title !== alwaysFilter) {
-            const url = item
-              .querySelector('a[href^="https://exhentai.org/g/"]')
-              ?.getAttribute("href");
-
-            enqueue(() => getDetailInfo(url)).then((info) => {
-              const div = document.createElement("div");
-              div.className = "detailInfo";
-              const shadow = div.attachShadow({ mode: "open" });
-
-              shadow.innerHTML = `
+            shadow.innerHTML = `
                 <span>收藏数：${info.favcount}</span>
                 <span>评分：${info.rating_label}(${info.rating_count})</span>
                 
@@ -854,13 +948,117 @@
                   }
                 </style>
               `;
-              item.querySelector(".gl3e")?.appendChild(div) ||
-                item.appendChild(div);
-            });
-          }
+            n.querySelector(".gl3e")?.appendChild(div) || n.appendChild(div);
+          });
         }
       } else {
+        // 隐藏信息
         document.querySelectorAll(".detailInfo").forEach((n) => n.remove());
+      }
+    }
+
+    // 合并标签 todo
+    async mergeTags(isChecked) {
+      if (pageType !== "main") return;
+
+      if (isChecked) {
+        const list = getList();
+        // 标签设置
+        const tagConfigMap = await getTags();
+
+        for (const n of list) {
+          if (n[IsFilter]) continue;
+
+          enqueue(() => this.getDetailInfo(n[URL])).then((info) => {
+            const { tagList } = info;
+
+            switch (inlineType) {
+              case "e":
+                // 扩展（全量标签）
+                {
+                  let contentMap = new Map(
+                    Array.from(n.querySelectorAll("td:not(.tc)")).map(
+                      (item) => {
+                        return [
+                          item.firstElementChild.title.split(":")[0],
+                          item,
+                        ];
+                      },
+                    ),
+                  );
+                  let tagsNodeList = Array.from(
+                    n.querySelectorAll("table div"),
+                  );
+                  let currentTags = tagsNodeList.map((n) => n.title);
+
+                  for (let tag of tagList) {
+                    if (
+                      !tagConfigMap.has(tag) || // 没有配置
+                      currentTags.includes(tag) // 没有遗漏
+                    )
+                      continue;
+
+                    const { color, weight, ehsTag_zh } = tagConfigMap.get(tag);
+                    const div = document.createElement("div");
+                    div.className = "gt mergeTag";
+                    div.style = `color:#f1f1f1;border-color:${color};background:radial-gradient(${color},${color}) !important`;
+                    div.innerHTML = ehsTag_zh;
+
+                    const parent = contentMap.get(tag.split(":")[0]);
+                    if (parent) {
+                      let tagsNodeList = Array.from(parent.childNodes);
+                      const refNode = tagsNodeList.find((n) => {
+                        return weight >= tagConfigMap.get(n.title).weight;
+                      });
+                      if (refNode) {
+                        parent.insertBefore(div, refNode);
+                      } else {
+                        parent.appendChild(div);
+                      }
+                    }
+                  }
+                }
+                break;
+              case "t":
+                // 缩略图（关注标签）
+                {
+                  let content = n.querySelector(".gl6t");
+                  let tagsNodeList = content
+                    ? Array.from(content.childNodes)
+                    : [];
+                  let currentTags = tagsNodeList.map((n) => n.title);
+
+                  for (let tag of tagList) {
+                    if (
+                      !tagConfigMap.has(tag) || // 没有配置
+                      currentTags.includes(tag) // 没有遗漏
+                    )
+                      continue;
+
+                    const { color, weight, ehsTag_zh } = tagConfigMap.get(tag);
+
+                    const div = document.createElement("div");
+                    div.className = "gt mergeTag";
+                    div.style = `color:#f1f1f1;border-color:${color};background:radial-gradient(${color},${color}) !important`;
+                    div.innerHTML = ehsTag_zh;
+
+                    const refNode = tagsNodeList.find((n) => {
+                      return weight >= tagConfigMap.get(n.title).weight;
+                    });
+                    if (refNode) {
+                      content.insertBefore(div, refNode);
+                    } else {
+                      content.appendChild(div);
+                    }
+                  }
+                }
+
+                break;
+            }
+          });
+        }
+      } else {
+        document.querySelectorAll(".mergeTag").forEach((n) => n.remove());
       }
     }
   }
@@ -902,6 +1100,56 @@
     return result;
   }
 
+  // API - 获取标签配置
+  async function getTags(disableCache = false) {
+    let tags = localStorage.getItem("tags");
+    let result = null;
+
+    if (tags && disableCache === false) {
+      result = new Map(JSON.parse(tags));
+    } else {
+      const response = await fetch(`${location.origin}/mytags`);
+      const htmlText = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlText, "text/html");
+
+      // 初始化标签 Map
+      const tagConfigMap = new Map();
+      const tagDivs = doc.querySelectorAll("#usertags_outer > div");
+      // 汉化信息
+      const ehsyringe = JSON.parse(
+        localStorage.getItem("ehsyringe.databaseMap"),
+      );
+
+      tagDivs.forEach((div) => {
+        const title = div.querySelector(".gt")?.getAttribute("title");
+
+        if (title) {
+          const ehsTag = div.querySelector(".gt")?.innerText;
+          const isWatch = div.querySelector("input[id^=tagwatch]").checked;
+          const weight = parseInt(
+            div.querySelector("[id^=tagweight]").value,
+            10,
+          );
+          const color = div.querySelector(".tagcolor").value;
+
+          tagConfigMap.set(title, {
+            ehsTag, // 标签简称
+            ehsTag_zh: (ehsyringe && ehsyringe[ehsTag]) || ehsTag, // 翻译标签
+            isWatch, // 是否关注
+            weight, // 权重
+            color, // 颜色
+          });
+        }
+      });
+
+      localStorage.setItem("tags", JSON.stringify([...tagConfigMap]));
+      result = tagConfigMap;
+    }
+
+    return result;
+  }
+
   // API - 更新收藏
   async function updateFavorites(type, gid, t) {
     const formData = new FormData();
@@ -934,6 +1182,35 @@
         data: { type, gid, t, codeStr },
       });
     }
+  }
+
+  // 获取主页画廊列表(主页)
+  function getList() {
+    // 从缓存读取总是过滤配置
+    const alwaysFilter = localStorage.getItem("alwaysFilter") || "";
+    // 获得画廊列表（兼容 扩展 or 缩略图）
+    const list =
+      inlineType === "e"
+        ? Array.from(document.querySelectorAll("table.itg >tbody >tr"))
+        : inlineType === "t"
+          ? Array.from(document.querySelectorAll(".itg.gld .gl1t"))
+          : [];
+
+    list.forEach((n) => {
+      // 画廊收藏状态
+      const find = n.querySelector('[id^="posted_"]');
+      const url = n
+        .querySelector('a[href^="https://exhentai.org/g/"]')
+        ?.getAttribute("href");
+
+      Object.assign(n, {
+        [FavoriteName]: find.title, // 收藏信息
+        [IsFilter]: alwaysFilter && find?.title === alwaysFilter, // 是否过滤
+        [URL]: url, // 详情页地址
+      });
+    });
+
+    return list;
   }
 
   // 生成文件名（详情页）
@@ -986,12 +1263,11 @@
     const shadowRoot = div.attachShadow({ mode: "open" });
     shadowRoot.innerHTML = `
       <style>
+        ${commonStyle.input}
         input {
           text-align: center;
         }
-        button {
-          padding: 0 16px;
-        }
+        ${commonStyle.button}
       </style>
       
       <input>
@@ -1029,44 +1305,46 @@
       .replace(/\s+/g, " ") // 合并连续空格
       .trim(); // 去除首尾空格
 
-    // 获取用户标签配置
-    const response = await fetch(`${location.origin}/mytags`);
-    const htmlText = await response.text();
-    // 解析 HTML 文档
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(htmlText, "text/html");
-    // 初始化标签 Map
-    const tagConfigMap = new Map([
-      // 额外增加标签(无需关注)
-      ["other:full color", { weight: -9 }], // 全彩
-      ["other:extraneous ads", { weight: -10 }], // 外部广告
-      ["other:incomplete", { weight: -11 }], // 缺页
-    ]);
-    const tagDivs = doc.querySelectorAll("#usertags_outer > div");
-    tagDivs.forEach((div) => {
-      const title = div.querySelector(".gt")?.title; // 标签名元素
-      const isWatch = div.querySelector("input[id^=tagwatch]").checked; // 是否关注
-      const [type, value] = title?.split(":") ?? [];
-
-      if (title && isWatch && !["artist", "group"].includes(type)) {
-        const weight = parseInt(div.querySelector("[id^=tagweight]").value, 10);
-        tagConfigMap.set(title, { weight }); // 设置权重
-      }
-    });
-
+    // 标签设置
+    const tagConfigMap = await getTags();
+    // 额外增加标签（无需关注）
+    let extraTags = {
+      "other:full color": { weight: -1, ehsTag_zh: "全彩" },
+      "other:extraneous ads": { weight: -2, ehsTag_zh: "外部广告" },
+      "other:incomplete": { weight: -3, ehsTag_zh: "缺页" },
+    };
+    // 详情页全部标签
     const tagDom = Array.from(document.querySelectorAll("#taglist a"));
 
-    const formatId = (id) => id.slice(3).replace(/_/g, " ");
+    // 通过 id 获取 tag
+    const getTag = (id) => id.slice(3).replace(/_/g, " ");
+
     let tags = [
       ...new Set(
         tagDom
-          .filter((n) => tagConfigMap.has(formatId(n.id)))
-          .sort(
-            (n, m) =>
-              tagConfigMap.get(formatId(m.id)).weight -
-              tagConfigMap.get(formatId(n.id)).weight,
-          )
-          .map((n) => `[${n.innerText}]`),
+          .filter((n) => {
+            const tag = getTag(n.id);
+            const tagInfo = tagConfigMap.get(tag);
+
+            if (/^group|artist/.test(tag)) {
+              // 排除特定标签类型（社团、艺术家）
+              return false;
+            } else if (tag in extraTags) {
+              n.order = extraTags[tag].weight;
+              n.ehsTag_zh = extraTags[tag].ehsTag_zh;
+              return true;
+            } else if (!tagInfo) {
+              return false;
+            } else if (!tagInfo.isWatch) {
+              return false;
+            } else {
+              n.order = tagInfo.weight;
+              n.ehsTag_zh = tagInfo.ehsTag_zh;
+              return true;
+            }
+          })
+          .sort((n, m) => m.order - n.order)
+          .map((n) => `[${n.ehsTag_zh}]`),
       ),
     ].join("");
 
@@ -1074,6 +1352,7 @@
 
     button.onclick = function () {
       navigator.clipboard.writeText(input.value);
+      messageBox.show("复制成功");
     };
 
     document.querySelector(".gm").appendChild(div);
@@ -1147,8 +1426,7 @@
         // 更新过滤
         filterBtn?.handleFilter();
       } else if (type === "toggleDetail") {
-        // configDialog?.toggleDetail(data);
-        configDialog.switch__showDetail.checked = data;
+        configDialog?.handleChannel(data);
       }
     };
 
@@ -1176,7 +1454,7 @@
       try {
         // 兼容性检查：确保存在 nexturl 属性
         if (!window.nexturl) {
-          return console.warn("[预加载] 没有找到 nexturl 参数");
+          return;
         }
 
         // 获取下一页内容
@@ -1206,8 +1484,6 @@
 
         // 插入到<head>中触发预加载
         document.head.appendChild(fragment);
-
-        console.log(`[预加载] 预加载了 ${imageUrls.size} 张图片`, imageUrls);
       } catch (error) {
         console.error("[预加载] 发生错误:", error);
         // 可在此添加错误上报逻辑
@@ -1228,6 +1504,10 @@
       break;
     case "favorites":
       prefetch();
+      break;
+    case "mytags":
+      // 更新缓存标签配置
+      getTags(true);
       break;
   }
 })();

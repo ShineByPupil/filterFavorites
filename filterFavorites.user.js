@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.10.0
+// @version      2.10.1
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -133,6 +133,9 @@
   customElements.define("message-box", MessageBox);
 
   class SwitchToggle extends HTMLElement {
+    // 标记是否处于静默更新模式
+    #isSilentUpdate = false;
+
     static get observedAttributes() {
       return ["checked", "disabled"];
     }
@@ -201,11 +204,14 @@
       if (name === "checked" && oldValue !== newValue) {
         const oldChecked = oldValue !== null;
         const newChecked = newValue !== null;
-        this.dispatchEvent(
-          new CustomEvent("change", {
-            detail: { value: newChecked, oldValue: oldChecked },
-          }),
-        );
+
+        if (!this.#isSilentUpdate) {
+          this.dispatchEvent(
+            new CustomEvent("change", {
+              detail: { value: newChecked, oldValue: oldChecked },
+            }),
+          );
+        }
       }
       if (name === "disabled") {
         this.$track.tabIndex = this.disabled ? -1 : 0;
@@ -242,6 +248,13 @@
         delete this[prop];
         this[prop] = val;
       }
+    }
+
+    // 静默更新方法（不触发事件）
+    setCheckedSilently(value) {
+      this.#isSilentUpdate = true; // 进入静默模式
+      this.checked = value;
+      this.#isSilentUpdate = false; // 退出静默模式
     }
   }
   customElements.define("switch-toggle", SwitchToggle);
@@ -878,15 +891,9 @@
     handleChannel(data) {
       const { isShowDetail, isShowDetailCount, isShowDetailTags } = data;
 
-      isShowDetail
-        ? this.switch__showDetail.setAttribute("checked", "")
-        : this.switch__showDetail.removeAttribute("checked");
-      isShowDetailCount
-        ? this.switch__count.setAttribute("checked", "")
-        : this.switch__count.removeAttribute("checked");
-      isShowDetailTags
-        ? this.switch__tags.setAttribute("checked", "")
-        : this.switch__tags.removeAttribute("checked");
+      this.switch__showDetail.setCheckedSilently(isShowDetail);
+      this.switch__count.setCheckedSilently(isShowDetailCount);
+      this.switch__tags.setCheckedSilently(isShowDetailTags);
     }
     // 获取详情页信息
     async getDetailInfo(url) {
@@ -957,7 +964,7 @@
       }
     }
 
-    // 合并标签 todo
+    // 合并标签
     async mergeTags(isChecked) {
       if (pageType !== "main") return;
 
@@ -1253,6 +1260,7 @@
       "超分辨率",
       "カラー化", // 全彩
       "フルカラー版",
+      "图源",
     ];
     const parenthesesRule = "\\([^(]*(" + keyword.join("|") + ")[^(]*\\)"; // 圆括号
     const squareBracketsRule = "\\[[^[]*(" + keyword.join("|") + ")[^[]*\\]"; // 方括号

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.10.1
+// @version      2.10.2
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -133,8 +133,8 @@
   customElements.define("message-box", MessageBox);
 
   class SwitchToggle extends HTMLElement {
-    // 标记是否处于静默更新模式
-    #isSilentUpdate = false;
+    // 事件来源类型: user | broadcast
+    #currentChangeSource = "user";
 
     static get observedAttributes() {
       return ["checked", "disabled"];
@@ -205,13 +205,17 @@
         const oldChecked = oldValue !== null;
         const newChecked = newValue !== null;
 
-        if (!this.#isSilentUpdate) {
-          this.dispatchEvent(
-            new CustomEvent("change", {
-              detail: { value: newChecked, oldValue: oldChecked },
-            }),
-          );
-        }
+        this.dispatchEvent(
+          new CustomEvent("change", {
+            detail: {
+              value: newChecked,
+              oldValue: oldChecked,
+              source: this.#currentChangeSource,
+            },
+          }),
+        );
+
+        this.#currentChangeSource = "user";
       }
       if (name === "disabled") {
         this.$track.tabIndex = this.disabled ? -1 : 0;
@@ -251,10 +255,9 @@
     }
 
     // 静默更新方法（不触发事件）
-    setCheckedSilently(value) {
-      this.#isSilentUpdate = true; // 进入静默模式
+    updateFromBroadcast(value) {
+      this.#currentChangeSource = "broadcast";
       this.checked = value;
-      this.#isSilentUpdate = false; // 退出静默模式
     }
   }
   customElements.define("switch-toggle", SwitchToggle);
@@ -828,7 +831,7 @@
       });
       // 是否显示画廊详情信息
       this.switch__showDetail.addEventListener("change", (event) => {
-        const { value } = event.detail;
+        const { value, source } = event.detail;
         this.isShowDetail = value;
 
         if (value) {
@@ -841,25 +844,33 @@
           this.switch__tags.removeAttribute("checked");
         }
 
-        this.updateDetailBitFlags();
+        if (source !== "broadcast") {
+          this.updateDetailBitFlags();
+        }
       });
 
       // 是否显示收藏数、评分信息
       this.switch__count.addEventListener("change", (event) => {
-        const { value } = event.detail;
+        const { value, source } = event.detail;
         this.isShowDetailCount = value;
 
         this.toggleDetail(value);
-        this.updateDetailBitFlags();
+
+        if (source !== "broadcast") {
+          this.updateDetailBitFlags();
+        }
       });
 
       // 是否合并关注标签
       this.switch__tags.addEventListener("change", (event) => {
-        const { value } = event.detail;
+        const { value, source } = event.detail;
         this.isShowDetailTags = value;
 
         this.mergeTags(value);
-        this.updateDetailBitFlags();
+
+        if (source !== "broadcast") {
+          this.updateDetailBitFlags();
+        }
       });
     }
     // 打开设置
@@ -891,9 +902,9 @@
     handleChannel(data) {
       const { isShowDetail, isShowDetailCount, isShowDetailTags } = data;
 
-      this.switch__showDetail.setCheckedSilently(isShowDetail);
-      this.switch__count.setCheckedSilently(isShowDetailCount);
-      this.switch__tags.setCheckedSilently(isShowDetailTags);
+      this.switch__showDetail.updateFromBroadcast(isShowDetail);
+      this.switch__count.updateFromBroadcast(isShowDetailCount);
+      this.switch__tags.updateFromBroadcast(isShowDetailTags);
     }
     // 获取详情页信息
     async getDetailInfo(url) {

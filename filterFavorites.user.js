@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.10.2
+// @version      2.11.0
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -28,9 +28,11 @@
         ? "detail"
         : pathname.includes("favorites.php")
           ? "favorites"
-          : pathname.includes("mytags")
-            ? "mytags"
-            : "other";
+          : pathname.includes("uconfig")
+            ? "uconfig"
+            : pathname.includes("mytags")
+              ? "mytags"
+              : "other";
 
   const inlineType = ["main", "tag"].includes(pageType)
     ? document.querySelector("select[onchange]")?.value
@@ -284,10 +286,9 @@
       const ulNode = (this.ulNode = document.createElement("ul"));
       ulNode.innerHTML = `
           <li class="favdel">取消收藏</li>
-          <li class="refresh">↻刷新</li>
         `;
 
-      ulNode.prepend(...this.#getFavoriteLi());
+      ulNode.prepend(...(await this.#getFavoriteLi()));
 
       const style = document.createElement("style");
 
@@ -356,6 +357,7 @@
       document.body.appendChild(div);
     }
 
+    // 初始化事件
     async initEvent() {
       // 收藏按钮事件委托
       this.ulNode.addEventListener("click", async (event) => {
@@ -368,23 +370,6 @@
             await updateFavorites("favdel", this.gid, this.t);
             this.gid = this.t = null;
             messageBox.show("取消收藏成功");
-          } else if (target.classList.contains("refresh")) {
-            // 刷新
-            this.ulNode.style.display = "none";
-
-            favoriteList = await getFavorites(true);
-
-            requestAnimationFrame(() => {
-              let list = this.ulNode.querySelectorAll(["li[data-index]"]) || [];
-
-              for (let i = 0; i < list.length; i++) {
-                this.ulNode.removeChild(list[i]);
-              }
-
-              this.ulNode.prepend(...this.#getFavoriteLi());
-
-              messageBox.show("刷新成功");
-            });
           } else if (index && this.gid && this.t) {
             // 设置收藏
             await updateFavorites(index, this.gid, this.t);
@@ -453,8 +438,9 @@
       });
     }
 
-    #getFavoriteLi() {
+    async #getFavoriteLi() {
       const result = [];
+      favoriteList = await getFavorites();
 
       for (let i = 0; i < favoriteList.length; i++) {
         if (!/^Favorites \d$/.test(favoriteList[i])) {
@@ -468,6 +454,14 @@
       }
 
       return result;
+    }
+
+    // 更新快捷收藏按钮元素
+    async updateUlNode() {
+      this.ulNode.innerHTML = `
+          <li class="favdel">取消收藏</li>
+        `;
+      this.ulNode.prepend(...(await this.#getFavoriteLi()));
     }
 
     show(left, top) {
@@ -1113,6 +1107,8 @@
       } else {
         throw new Error(doc.body.innerText);
       }
+
+      channel?.postMessage({ type: "getFavorites" });
     }
 
     return result;
@@ -1429,23 +1425,30 @@
 
     channel.onmessage = function (event) {
       const { type, data } = event.data;
-      if (type === "updateFavorites") {
-        // 更新收藏显示
-        if (pageType === "detail") {
-          const groups = location.pathname.split("/");
-          if (
-            groups[groups.length - 3] !== data.gid ||
-            groups[groups.length - 2] !== data.t
-          )
-            return;
-        }
 
-        const dynamicFunction = new Function(data.codeStr);
-        dynamicFunction();
-        // 更新过滤
-        filterBtn?.handleFilter();
-      } else if (type === "toggleDetail") {
-        configDialog?.handleChannel(data);
+      switch (type) {
+        case "updateFavorites":
+          // 更新收藏显示
+          if (pageType === "detail") {
+            const groups = location.pathname.split("/");
+            if (
+              groups[groups.length - 3] !== data.gid ||
+              groups[groups.length - 2] !== data.t
+            )
+              return;
+          }
+
+          const dynamicFunction = new Function(data.codeStr);
+          dynamicFunction();
+          // 更新过滤
+          filterBtn?.handleFilter();
+          break;
+        case "toggleDetail":
+          configDialog?.handleChannel(data);
+          break;
+        case "getFavorites":
+          favoritesBtn?.updateUlNode();
+          break;
       }
     };
 
@@ -1523,6 +1526,9 @@
       break;
     case "favorites":
       prefetch();
+      break;
+    case "uconfig":
+      getFavorites(true);
       break;
     case "mytags":
       // 更新缓存标签配置

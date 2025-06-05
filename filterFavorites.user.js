@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.11.0
+// @version      2.12.0
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -934,14 +934,10 @@
 
     // 切换详情信息
     toggleDetail(isChecked) {
-      if (pageType !== "main") return;
-
       if (isChecked) {
         const list = getList();
 
         for (const n of list) {
-          if (n[IsFilter]) continue;
-
           enqueue(() => this.getDetailInfo(n[URL])).then((info) => {
             // 5 - 将详细页信息插入文档
             const div = document.createElement("div");
@@ -971,101 +967,88 @@
 
     // 合并标签
     async mergeTags(isChecked) {
-      if (pageType !== "main") return;
-
       if (isChecked) {
         const list = getList();
         // 标签设置
         const tagConfigMap = await getTags();
+        const createTagDom = (ehsTag_zh, color) => {
+          const div = document.createElement("div");
+          div.className = "gt mergeTag";
+          div.style.color = "#f1f1f1";
+          div.style.borderColor = `${color}`;
+          div.style.background = `${color}`;
+          div.style.outline = `3px double ${color}`;
+          div.innerHTML = ehsTag_zh;
+
+          // background: radial-gradient(#00ff00,#00ff00)
+          // #00ff00
+
+          console.log(ehsTag_zh, color, div);
+          return div;
+        };
 
         for (const n of list) {
-          if (n[IsFilter]) continue;
-
           enqueue(() => this.getDetailInfo(n[URL])).then((info) => {
             const { tagList } = info;
 
-            switch (inlineType) {
-              case "e":
-                // 扩展（全量标签）
-                {
-                  let contentMap = new Map(
-                    Array.from(n.querySelectorAll("td:not(.tc)")).map(
-                      (item) => {
-                        return [
-                          item.firstElementChild.title.split(":")[0],
-                          item,
-                        ];
-                      },
-                    ),
-                  );
-                  let tagsNodeList = Array.from(
-                    n.querySelectorAll("table div"),
-                  );
-                  let currentTags = tagsNodeList.map((n) => n.title);
+            if (inlineType === "e") {
+              // 扩展（全量标签）
+              let contentMap = new Map(
+                Array.from(n.querySelectorAll("td:not(.tc)")).map((item) => {
+                  return [item.firstElementChild.title.split(":")[0], item];
+                }),
+              );
+              let tagsNodeList = Array.from(n.querySelectorAll("table div"));
+              let currentTags = tagsNodeList.map((n) => n.title);
 
-                  for (let tag of tagList) {
-                    if (
-                      !tagConfigMap.has(tag) || // 没有配置
-                      currentTags.includes(tag) // 没有遗漏
-                    )
-                      continue;
+              for (let tag of tagList) {
+                if (
+                  !tagConfigMap.has(tag) || // 没有配置
+                  currentTags.includes(tag) // 没有遗漏
+                )
+                  continue;
 
-                    const { color, weight, ehsTag_zh } = tagConfigMap.get(tag);
-                    const div = document.createElement("div");
-                    div.className = "gt mergeTag";
-                    div.style = `color:#f1f1f1;border-color:${color};background:radial-gradient(${color},${color}) !important`;
-                    div.innerHTML = ehsTag_zh;
+                const { color, weight, ehsTag_zh } = tagConfigMap.get(tag);
+                const tagDom = createTagDom(ehsTag_zh, color);
 
-                    const parent = contentMap.get(tag.split(":")[0]);
-                    if (parent) {
-                      let tagsNodeList = Array.from(parent.childNodes);
-                      const refNode = tagsNodeList.find((n) => {
-                        return weight >= tagConfigMap.get(n.title).weight;
-                      });
-                      if (refNode) {
-                        parent.insertBefore(div, refNode);
-                      } else {
-                        parent.appendChild(div);
-                      }
-                    }
+                const parent = contentMap.get(tag.split(":")[0]);
+                if (parent) {
+                  let tagsNodeList = Array.from(parent.childNodes);
+                  const refNode = tagsNodeList.find((n) => {
+                    return weight >= tagConfigMap.get(n.title).weight;
+                  });
+                  if (refNode) {
+                    parent.insertBefore(tagDom, refNode);
+                  } else {
+                    parent.appendChild(tagDom);
                   }
                 }
-                break;
-              case "t":
-                // 缩略图（关注标签）
-                {
-                  let content = n.querySelector(".gl6t");
-                  let tagsNodeList = content
-                    ? Array.from(content.childNodes)
-                    : [];
-                  let currentTags = tagsNodeList.map((n) => n.title);
+              }
+            } else if (inlineType === "t" || pageType === "favorites") {
+              // 缩略图（关注标签）
+              let content = n.querySelector(".gl6t");
+              let tagsNodeList = content ? Array.from(content.childNodes) : [];
+              let currentTags = tagsNodeList.map((n) => n.title);
 
-                  for (let tag of tagList) {
-                    if (
-                      !tagConfigMap.has(tag) || // 没有配置
-                      currentTags.includes(tag) // 没有遗漏
-                    )
-                      continue;
+              for (let tag of tagList) {
+                if (
+                  !tagConfigMap.has(tag) || // 没有配置
+                  currentTags.includes(tag) // 没有遗漏
+                )
+                  continue;
 
-                    const { color, weight, ehsTag_zh } = tagConfigMap.get(tag);
+                const { color, weight, ehsTag_zh } = tagConfigMap.get(tag);
+                const tagDom = createTagDom(ehsTag_zh, color);
 
-                    const div = document.createElement("div");
-                    div.className = "gt mergeTag";
-                    div.style = `color:#f1f1f1;border-color:${color};background:radial-gradient(${color},${color}) !important`;
-                    div.innerHTML = ehsTag_zh;
-
-                    const refNode = tagsNodeList.find((n) => {
-                      return weight >= tagConfigMap.get(n.title).weight;
-                    });
-                    if (refNode) {
-                      content.insertBefore(div, refNode);
-                    } else {
-                      content.appendChild(div);
-                    }
-                  }
+                const refNode = tagsNodeList.find((n) => {
+                  return weight >= tagConfigMap.get(n.title).weight;
+                });
+                if (refNode) {
+                  content.insertBefore(tagDom, refNode);
+                } else {
+                  content.appendChild(tagDom);
                 }
-
-                break;
+              }
             }
           });
         }
@@ -1206,7 +1189,7 @@
     const list =
       inlineType === "e"
         ? Array.from(document.querySelectorAll("table.itg >tbody >tr"))
-        : inlineType === "t"
+        : inlineType === "t" || pageType === "favorites"
           ? Array.from(document.querySelectorAll(".itg.gld .gl1t"))
           : [];
 
@@ -1268,6 +1251,7 @@
       "カラー化", // 全彩
       "フルカラー版",
       "图源",
+      "无修正",
     ];
     const parenthesesRule = "\\([^(]*(" + keyword.join("|") + ")[^(]*\\)"; // 圆括号
     const squareBracketsRule = "\\[[^[]*(" + keyword.join("|") + ")[^[]*\\]"; // 方括号

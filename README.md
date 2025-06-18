@@ -6,7 +6,7 @@
 - **表站里站都支持**
 - **如果有好的想法欢迎反馈留言**
 
-<a href="https://github.com/ShineByPupil/filterFavorites/raw/main/filterFavorites.user.js">点击此处安装</a>
+<a href="https://github.com/ShineByPupil/filterFavorites/raw/refs/heads/main/filterFavorites.user.js">点击此处安装</a>
 
 ## 一、快速设置收藏（搜索页/详情页）
 

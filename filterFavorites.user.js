@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
-// @namespace    http://tampermonkey.net/
-// @version      2.13.0
+// @namespace    https://greasyfork.org/zh-CN/users/1296281
+// @version      2.13.1
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil

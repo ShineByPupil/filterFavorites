@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    http://tampermonkey.net/
-// @version      2.12.0
+// @version      2.13.0
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -9,6 +9,7 @@
 // @match        *://e-hentai.org/*
 // @icon         https://e-hentai.org/favicon.ico
 // @grant        none
+// @require      https://update.greasyfork.org/scripts/539247/1608663/%E9%80%9A%E7%94%A8%E7%BB%84%E4%BB%B6%E5%BA%93.js
 // ==/UserScript==
 
 (async function () {
@@ -89,50 +90,6 @@
       });
     };
   })();
-
-  // 消息提示
-  class MessageBox extends HTMLElement {
-    constructor() {
-      super();
-      const shadow = this.attachShadow({ mode: "open" });
-
-      this.message = document.createElement("div");
-      this.message.className = "messageBox";
-
-      const style = document.createElement("style");
-      style.textContent = `
-          .messageBox {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #ffffff; /* 明亮的背景色 */
-            color: #000000; /* 深色文本 */
-            padding: 10px 20px;
-            border-radius: 5px;
-            z-index: 100;
-            display: none; /* 初始隐藏 */
-            transition: opacity 0.3s ease;
-            opacity: 1;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); /* 添加阴影效果 */
-          }
-        `;
-
-      shadow.appendChild(style);
-      shadow.appendChild(this.message);
-    }
-
-    show(message, duration = 2500) {
-      this.message.textContent = message;
-      this.message.style.display = "block"; // 显示消息
-
-      // 设置一定时间后自动隐藏消息
-      setTimeout(() => {
-        this.message.style.display = "none";
-      }, duration);
-    }
-  }
-  customElements.define("message-box", MessageBox);
 
   class SwitchToggle extends HTMLElement {
     // 事件来源类型: user | broadcast
@@ -369,13 +326,13 @@
             // 取消收藏
             await updateFavorites("favdel", this.gid, this.t);
             this.gid = this.t = null;
-            messageBox.show("取消收藏成功");
+            MxMessageBox.success("取消收藏成功");
           } else if (index && this.gid && this.t) {
             // 设置收藏
             await updateFavorites(index, this.gid, this.t);
             this.gid = this.t = null;
             filterBtn?.handleFilter();
-            messageBox.show("收藏成功");
+            MxMessageBox.success("收藏成功");
             favoritesBtn.hide();
           }
         }
@@ -594,12 +551,12 @@
       });
       this.filterAllBtn.addEventListener("click", async () => {
         if (!this.alwaysFilter) {
-          return messageBox.show("请先设置总是过滤");
+          return MxMessageBox.warining("请先设置总是过滤");
         }
 
         const index = favoriteList.indexOf(this.alwaysFilter);
         if (index === -1) {
-          return messageBox.show("总是过滤收藏不存在");
+          return MxMessageBox.error("总是过滤收藏不存在");
         }
 
         const list = Array.from(
@@ -620,7 +577,7 @@
           }),
         );
 
-        messageBox.show("过滤全部成功");
+        MxMessageBox.success("过滤全部成功");
       });
       this.configBtn.addEventListener("click", () => configDialog?.show());
 
@@ -1064,9 +1021,6 @@
   const channel = initBroadcastChannel(); // 标签页广播
   const configDialog = new ConfigDialog();
 
-  const messageBox = document.createElement("message-box");
-  document.body.appendChild(messageBox);
-
   // API - 获取收藏配置
   async function getFavorites(disableCache = false) {
     let favoriteList = localStorage.getItem("favoriteList");
@@ -1252,6 +1206,7 @@
       "フルカラー版",
       "图源",
       "无修正",
+      "快楽天",
     ];
     const parenthesesRule = "\\([^(]*(" + keyword.join("|") + ")[^(]*\\)"; // 圆括号
     const squareBracketsRule = "\\[[^[]*(" + keyword.join("|") + ")[^[]*\\]"; // 方括号
@@ -1351,7 +1306,7 @@
 
     button.onclick = function () {
       navigator.clipboard.writeText(input.value);
-      messageBox.show("复制成功");
+      MxMessageBox.success("复制成功");
     };
 
     document.querySelector(".gm").appendChild(div);

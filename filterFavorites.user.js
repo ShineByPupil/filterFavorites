@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    https://greasyfork.org/zh-CN/users/1296281
-// @version      2.13.2
+// @version      2.13.3
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -9,7 +9,7 @@
 // @match        *://e-hentai.org/*
 // @icon         https://e-hentai.org/favicon.ico
 // @grant        none
-// @require      https://update.greasyfork.org/scripts/539247/1609899/%E9%80%9A%E7%94%A8%E7%BB%84%E4%BB%B6%E5%BA%93.js
+// @require      https://update.greasyfork.org/scripts/539247/1610436/%E9%80%9A%E7%94%A8%E7%BB%84%E4%BB%B6%E5%BA%93.js
 // ==/UserScript==
 
 (async function () {
@@ -326,13 +326,13 @@
             // 取消收藏
             await updateFavorites("favdel", this.gid, this.t);
             this.gid = this.t = null;
-            MxMessageBox.success("取消收藏成功");
+            MxMessage.success("取消收藏成功");
           } else if (index && this.gid && this.t) {
             // 设置收藏
             await updateFavorites(index, this.gid, this.t);
             this.gid = this.t = null;
             filterBtn?.handleFilter();
-            MxMessageBox.success("收藏成功");
+            MxMessage.success("收藏成功");
             favoritesBtn.hide();
           }
         }
@@ -551,12 +551,12 @@
       });
       this.filterAllBtn.addEventListener("click", async () => {
         if (!this.alwaysFilter) {
-          return MxMessageBox.warining("请先设置总是过滤");
+          return MxMessage.warining("请先设置总是过滤");
         }
 
         const index = favoriteList.indexOf(this.alwaysFilter);
         if (index === -1) {
-          return MxMessageBox.error("总是过滤收藏不存在");
+          return MxMessage.error("总是过滤收藏不存在");
         }
 
         const list = Array.from(
@@ -577,7 +577,7 @@
           }),
         );
 
-        MxMessageBox.success("过滤全部成功");
+        MxMessage.success("过滤全部成功");
       });
       this.configBtn.addEventListener("click", () => configDialog?.show());
 
@@ -1306,7 +1306,7 @@
 
     button.onclick = function () {
       navigator.clipboard.writeText(input.value);
-      MxMessageBox.success("复制成功");
+      MxMessage.success("复制成功");
     };
 
     document.querySelector(".gm").appendChild(div);

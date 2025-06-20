@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    https://greasyfork.org/zh-CN/users/1296281
-// @version      2.14.0
+// @version      2.14.1
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -9,7 +9,7 @@
 // @match        *://e-hentai.org/*
 // @icon         https://e-hentai.org/favicon.ico
 // @grant        none
-// @require      https://raw.githubusercontent.com/ShineByPupil/commonComponents/refs/heads/master/commonComponents.lib.js
+// @require      https://update.greasyfork.org/scripts/539247/1611171/%E9%80%9A%E7%94%A8%E7%BB%84%E4%BB%B6%E5%BA%93.js
 // ==/UserScript==
 
 (async function () {

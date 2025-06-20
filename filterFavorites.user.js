@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    https://greasyfork.org/zh-CN/users/1296281
-// @version      2.13.3
+// @version      2.14.0
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -9,7 +9,7 @@
 // @match        *://e-hentai.org/*
 // @icon         https://e-hentai.org/favicon.ico
 // @grant        none
-// @require      https://update.greasyfork.org/scripts/539247/1610436/%E9%80%9A%E7%94%A8%E7%BB%84%E4%BB%B6%E5%BA%93.js
+// @require      https://raw.githubusercontent.com/ShineByPupil/commonComponents/refs/heads/master/commonComponents.lib.js
 // ==/UserScript==
 
 (async function () {
@@ -38,29 +38,7 @@
   const inlineType = ["main", "tag"].includes(pageType)
     ? document.querySelector("select[onchange]")?.value
     : null;
-  const commonStyle = {
-    input: `
-      input {
-        color: #f1f1f1;
-        background-color: #34353b;
-        border: 2px solid #8d8d8d;
-        border-radius: 3px;
-        outline: none;
-      }
-    `,
-    button: `
-      button {
-        background-color: #4C6EF5;
-        color: #FFFFFF;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        padding: 4px 10px;
-        text-align: center;
-        outline: none;
-      } 
-    `,
-  };
+
   // 处理并发请求
   const enqueue = (function (activeSize = 5) {
     const activeSet = new Set();
@@ -464,70 +442,68 @@
     }
 
     initRender() {
+      const htmlTemplate = document.createElement("template");
+      htmlTemplate.innerHTML = `
+        <div>
+          <mx-button type="primary" ripple class="configBtn">
+            <mx-icon type="setting"></mx-icon>设置
+          </mx-button>
+          <mx-button type="primary" ripple class="refresh">
+            <mx-icon type="refresh"></mx-icon>刷新
+          </mx-button>
+          <mx-badge class="favoriteCount">
+            <mx-button type="primary" ripple class="toggle">
+              ${this.isFilter ? "点击显示" : "点击隐藏"}
+            </mx-button>
+          </mx-badge>
+          <mx-badge class="filterCount">
+            <mx-button type="primary" ripple class="filter">总是过滤</mx-button>
+          </mx-badge>
+          <mx-button type="primary" ripple class="filterAll" ${!this.alwaysFilter ? "disabled" : ""}>
+            过滤全部
+          </mx-button>
+        </div>
+      `;
+
+      const cssTemplate = document.createElement("template");
+      cssTemplate.innerHTML = `
+        <style>
+          div {
+            position: fixed;
+            gap: 6px;
+            right: 15px;
+            bottom: 15px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+          }
+          mx-button {
+            position: relative;
+          }
+          mx-button::part(button) {
+            width: 100%;
+          }
+          button.disabled {
+            background-color: #C0C4CC;
+            cursor: not-allowed;
+          }
+        </style>
+      `;
+
       const div = document.createElement("div");
       div.dataset.type = "filterBtn";
-      const shadow = div.attachShadow({ mode: "open" });
-
-      shadow.innerHTML = `
-          <div>
-            <button class="configBtn">⚙️ 设置</button>
-            <button class="refresh">↻ 刷新</button>
-            <button class="toggle">${this.isFilter ? "点击显示" : "点击隐藏"}</button>
-            <button class="filter">总是过滤</button>
-            <button class="filterAll ${!this.alwaysFilter ? "disabled" : ""}">过滤全部</button>
-            
-            <sup class="favoriteCount"></sup>
-            <sup class="filterCount"></sup>
-          </div>
-          
-          <style>
-            div {
-              position: fixed;
-              gap: 6px;
-              right: 15px;
-              bottom: 15px;
-              z-index: 100;
-              display: flex;
-              flex-direction: column;
-            }
-            
-            ${commonStyle.button}
-            
-            button.disabled {
-              background-color: #C0C4CC;
-              cursor: not-allowed;
-            }
-            
-            sup {
-              position: absolute;
-              right: 0;
-              transform: translateX(50%);
-              background-color: #f56c6c;
-              border-radius: 10px;
-              padding: 0 4px;
-              display: none;
-              color: #FFFFFF;
-            }
-            
-            sup.favoriteCount {
-              bottom: 89px;
-            }
-            sup.filterCount {
-             bottom: 55px;
-            }
-          </style>
-        `;
+      div.attachShadow({ mode: "open" });
+      div.shadowRoot.append(htmlTemplate.content, cssTemplate.content);
 
       document.body.appendChild(div);
 
-      this.refreshBtn = shadow.querySelector(".refresh");
-      this.toggleBtn = shadow.querySelector(".toggle");
-      this.filterBtn = shadow.querySelector(".filter");
-      this.filterAllBtn = shadow.querySelector(".filterAll");
-      this.configBtn = shadow.querySelector(".configBtn");
-
-      this.favoriteSup = shadow.querySelector(".favoriteCount");
-      this.filterSup = shadow.querySelector(".filterCount");
+      this.refreshBtn = div.shadowRoot.querySelector(".refresh");
+      this.toggleBtn = div.shadowRoot.querySelector(".toggle");
+      this.filterBtn = div.shadowRoot.querySelector(".filter");
+      this.filterAllBtn = div.shadowRoot.querySelector(".filterAll");
+      this.configBtn = div.shadowRoot.querySelector(".configBtn");
+      this.favoriteSup = div.shadowRoot.querySelector(".favoriteCount");
+      this.filterSup = div.shadowRoot.querySelector(".filterCount");
     }
 
     initEvent() {
@@ -535,7 +511,7 @@
       this.toggleBtn.addEventListener("click", (e) => {
         this.isFilter = !this.isFilter;
         localStorage.setItem("isFilter", this.isFilter);
-        e.target.innerText = this.isFilter ? "点击显示" : "点击隐藏";
+        e.target.firstChild.data = this.isFilter ? "点击显示" : "点击隐藏";
         this.handleFilter();
       });
       this.filterBtn.addEventListener("click", () => {
@@ -546,12 +522,16 @@
           localStorage.setItem("alwaysFilter", this.alwaysFilter);
           this.handleFilter();
 
-          this.filterAllBtn.classList.toggle("disabled", !this.alwaysFilter);
+          if (!this.alwaysFilter) {
+            this.filterAllBtn.setAttribute("disabled", "");
+          } else {
+            this.filterAllBtn.removeAttribute("disabled");
+          }
         }
       });
       this.filterAllBtn.addEventListener("click", async () => {
         if (!this.alwaysFilter) {
-          return MxMessage.warining("请先设置总是过滤");
+          return MxMessage.warning("请先设置总是过滤");
         }
 
         const index = favoriteList.indexOf(this.alwaysFilter);
@@ -619,8 +599,8 @@
     handleFilter() {
       if (window.location.pathname === "/favorites.php") return;
 
-      this.favoriteSup.style.display = "";
-      this.filterSup.style.display = "";
+      this.favoriteSup.value = "";
+      this.filterSup.value = "";
       this.favoriteCount = this.filterCount = 0;
 
       const list = getList();
@@ -639,14 +619,11 @@
 
       // 更新 count 统计数据
       if (this.favoriteCount && this.isFilter) {
-        this.favoriteSup.innerText =
+        this.favoriteSup.value =
           this.favoriteCount > 99 ? "99+" : this.favoriteCount;
-        this.favoriteSup.style.display = "block";
       }
       if (this.filterCount) {
-        this.filterSup.innerText =
-          this.filterCount > 99 ? "99+" : this.filterCount;
-        this.filterSup.style.display = "block";
+        this.filterSup.value = this.filterCount > 99 ? "99+" : this.filterCount;
       }
     }
   }
@@ -1211,24 +1188,39 @@
     const parenthesesRule = "\\([^(]*(" + keyword.join("|") + ")[^(]*\\)"; // 圆括号
     const squareBracketsRule = "\\[[^[]*(" + keyword.join("|") + ")[^[]*\\]"; // 方括号
 
-    const div = document.createElement("div");
-    div.style.display = "grid";
-    div.style.gridTemplateColumns = "1fr auto auto";
-    const shadowRoot = div.attachShadow({ mode: "open" });
-    shadowRoot.innerHTML = `
+    const htmlTemplate = document.createElement("template");
+    htmlTemplate.innerHTML = `
+      <mx-input></mx-input>
+      <mx-button type="primary" ripple>复制</mx-button>
+    `;
+
+    const cssTemplate = document.createElement("template");
+    cssTemplate.innerHTML = `
       <style>
-        ${commonStyle.input}
-        input {
+        :host {
+          display: grid;
+          grid-template-columns: 1fr auto auto;
+        }
+        mx-input {
+          background: #34353b;
+          border-top-right-radius: 0;
+          border-bottom-right-radius: 0;
           text-align: center;
         }
-        ${commonStyle.button}
+        mx-button {
+          border-top-left-radius: 0;
+          border-bottom-left-radius: 0;
+        }
       </style>
-      
-      <input>
-      <button>复制</button>
     `;
-    const input = shadowRoot.querySelector("input");
-    const button = shadowRoot.querySelector("button");
+
+    const div = document.createElement("div");
+    div.attachShadow({ mode: "open" });
+    div.shadowRoot.append(htmlTemplate.content, cssTemplate.content);
+    document.querySelector(".gm").appendChild(div);
+
+    const input = div.shadowRoot.querySelector("mx-input");
+    const button = div.shadowRoot.querySelector("mx-button");
 
     let title =
       document.querySelector("#gj").innerText ||
@@ -1308,8 +1300,6 @@
       navigator.clipboard.writeText(input.value);
       MxMessage.success("复制成功");
     };
-
-    document.querySelector(".gm").appendChild(div);
   }
 
   // 鼠标中键标签，快速查询（详情页）

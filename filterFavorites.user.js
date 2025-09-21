@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    https://greasyfork.org/zh-CN/users/1296281
-// @version      2.14.1
+// @version      2.15.0
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -9,7 +9,7 @@
 // @match        *://e-hentai.org/*
 // @icon         https://e-hentai.org/favicon.ico
 // @grant        none
-// @require      https://update.greasyfork.org/scripts/539247/1611171/%E9%80%9A%E7%94%A8%E7%BB%84%E4%BB%B6%E5%BA%93.js
+// @require      https://update.greasyfork.org/scripts/539247/1664278/%E9%80%9A%E7%94%A8%E7%BB%84%E4%BB%B6%E5%BA%93.js
 // ==/UserScript==
 
 (async function () {
@@ -38,6 +38,40 @@
   const inlineType = ["main", "tag"].includes(pageType)
     ? document.querySelector("select[onchange]")?.value
     : null;
+
+  class BitFlags {
+    #value = Number(localStorage.getItem("test") || 0);
+    positions = new Map([
+      ["isShowDetail", 0], // 是否显示画廊详情信息
+      ["isShowDetailCount", 1], // 是否显示收藏数、评分信息
+      ["isShowDetailTags", 2], // 是否合并关注标签
+      ["isAlwaysFilter", 3], // 是否开启总是过滤
+      ["isShowFavs", 4], // 是否显示收藏
+      ["isShowFilter", 5], // 是否显示过滤
+    ]);
+
+    constructor() {}
+
+    getVal(key) {
+      if (this.positions.has(key)) {
+        const index = this.positions.get(key);
+        return (this.#value & (1 << index)) !== 0;
+      } else {
+        throw new Error(`找不到变量 ${key}`);
+      }
+    }
+    setVal(key, value) {
+      if (this.positions.has(key)) {
+        const index = this.positions.get(key);
+
+        value ? (this.#value |= 1 << index) : (this.#value &= ~(1 << index));
+        localStorage.setItem("test", String(this.#value));
+      } else {
+        throw new Error(`找不到变量 ${key}`);
+      }
+    }
+  }
+  const bitFlags = new BitFlags();
 
   // 处理并发请求
   const enqueue = (function (activeSize = 5) {
@@ -68,136 +102,6 @@
       });
     };
   })();
-
-  class SwitchToggle extends HTMLElement {
-    // 事件来源类型: user | broadcast
-    #currentChangeSource = "user";
-
-    static get observedAttributes() {
-      return ["checked", "disabled"];
-    }
-
-    constructor() {
-      super();
-      const shadow = this.attachShadow({ mode: "open" });
-      shadow.innerHTML = `
-        <div class="track" tabindex="0" role="switch">
-          <div class="thumb"></div>
-        </div>
-        
-        <style>
-          :host {
-            display: inline-block;
-            aspect-ratio: 2/1;
-            height: 20px;
-          }
-          .track {
-            width: 100%;
-            height: 100%;
-            background: #ccc;
-            border-radius: 14px;
-            position: relative;
-            transition: background .3s;
-            cursor: pointer;
-            outline: none;
-          }
-          .thumb {
-            aspect-ratio: 1/1;
-            height: calc(100% - 4px);
-            background: #fff;
-            border-radius: 50%;
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            transition: transform .3s;
-          }
-          :host([checked]) .track {
-            background: #4C6EF5;
-          }
-          :host([checked]) .thumb {
-            transform: translateX(calc(100% + 4px));
-          }
-        </style>
-       
-    `;
-
-      this.$track = shadow.querySelector(".track");
-      this.$track.addEventListener("click", () => this.toggle());
-      this.$track.addEventListener("keydown", (e) => {
-        if ((e.key === " " || e.key === "Enter") && !this.disabled) {
-          e.preventDefault();
-          this.toggle();
-        }
-      });
-    }
-
-    connectedCallback() {
-      this._upgrade("checked");
-      this._upgrade("disabled");
-      this.$track.tabIndex = this.disabled ? -1 : 0;
-    }
-
-    attributeChangedCallback(name, oldValue, newValue) {
-      if (name === "checked" && oldValue !== newValue) {
-        const oldChecked = oldValue !== null;
-        const newChecked = newValue !== null;
-
-        this.dispatchEvent(
-          new CustomEvent("change", {
-            detail: {
-              value: newChecked,
-              oldValue: oldChecked,
-              source: this.#currentChangeSource,
-            },
-          }),
-        );
-
-        this.#currentChangeSource = "user";
-      }
-      if (name === "disabled") {
-        this.$track.tabIndex = this.disabled ? -1 : 0;
-      }
-    }
-
-    // 属性反射
-    get checked() {
-      return this.hasAttribute("checked");
-    }
-    set checked(val) {
-      val ? this.setAttribute("checked", "") : this.removeAttribute("checked");
-    }
-
-    get disabled() {
-      return this.hasAttribute("disabled");
-    }
-    set disabled(val) {
-      val
-        ? this.setAttribute("disabled", "")
-        : this.removeAttribute("disabled");
-    }
-
-    // 切换方法
-    toggle() {
-      if (this.disabled) return;
-      this.checked = !this.checked;
-    }
-
-    // 升级已有属性
-    _upgrade(prop) {
-      if (this.hasOwnProperty(prop)) {
-        const val = this[prop];
-        delete this[prop];
-        this[prop] = val;
-      }
-    }
-
-    // 静默更新方法（不触发事件）
-    updateFromBroadcast(value) {
-      this.#currentChangeSource = "broadcast";
-      this.checked = value;
-    }
-  }
-  customElements.define("switch-toggle", SwitchToggle);
 
   // 快速收藏
   class FavoritesBtn {
@@ -418,13 +322,14 @@
   // 过滤按钮
   class FilterBtn {
     constructor() {
-      this.isFilter = localStorage.getItem("isFilter") === "true";
+      this.isShowFavs = bitFlags.getVal("isShowFavs");
+      this.isShowFilter = bitFlags.getVal("isShowFilter");
       this.alwaysFilter = localStorage.getItem("alwaysFilter") || "";
 
-      this.refreshBtn = null;
-      this.toggleBtn = null;
-      this.filterBtn = null;
-      this.filterAllBtn = null;
+      this.button__refresh = null;
+      this.button__toggle = null;
+      this.button__filter = null;
+      this.button__filterAll = null;
       this.favoriteSup = null;
       this.filterSup = null;
 
@@ -445,21 +350,33 @@
       const htmlTemplate = document.createElement("template");
       htmlTemplate.innerHTML = `
         <div>
-          <mx-button type="primary" ripple class="configBtn">
+          <mx-button class="button__config" type="primary" ripple>
             <mx-icon type="setting"></mx-icon>设置
           </mx-button>
-          <mx-button type="primary" ripple class="refresh">
+          <mx-button class="button__refresh" type="primary" ripple>
             <mx-icon type="refresh"></mx-icon>刷新
           </mx-button>
           <mx-badge class="favoriteCount">
-            <mx-button type="primary" ripple class="toggle">
-              ${this.isFilter ? "点击显示" : "点击隐藏"}
+            <mx-button class="button__toggle" type="primary" ripple>
+              ${this.isShowFavs ? "隐藏收藏" : "显示收藏"}
             </mx-button>
           </mx-badge>
           <mx-badge class="filterCount">
-            <mx-button type="primary" ripple class="filter">总是过滤</mx-button>
+            <mx-button
+              class="button__filter"
+              type="primary"
+              ripple
+              ${!this.alwaysFilter ? "disabled" : ""}
+            >
+              ${this.isShowFilter ? "隐藏过滤" : "显示过滤"}
+            </mx-button>
           </mx-badge>
-          <mx-button type="primary" ripple class="filterAll" ${!this.alwaysFilter ? "disabled" : ""}>
+          <mx-button
+            class="button__filterAll"
+            type="primary"
+            ripple
+            ${!this.alwaysFilter ? "disabled" : ""}
+          >
             过滤全部
           </mx-button>
         </div>
@@ -497,46 +414,48 @@
 
       document.body.appendChild(div);
 
-      this.refreshBtn = div.shadowRoot.querySelector(".refresh");
-      this.toggleBtn = div.shadowRoot.querySelector(".toggle");
-      this.filterBtn = div.shadowRoot.querySelector(".filter");
-      this.filterAllBtn = div.shadowRoot.querySelector(".filterAll");
-      this.configBtn = div.shadowRoot.querySelector(".configBtn");
+      this.button__refresh = div.shadowRoot.querySelector(".button__refresh");
+      this.button__toggle = div.shadowRoot.querySelector(".button__toggle");
+      this.button__filter = div.shadowRoot.querySelector(".button__filter");
+      this.button__filterAll =
+        div.shadowRoot.querySelector(".button__filterAll");
+      this.button__config = div.shadowRoot.querySelector(".button__config");
       this.favoriteSup = div.shadowRoot.querySelector(".favoriteCount");
       this.filterSup = div.shadowRoot.querySelector(".filterCount");
     }
 
     initEvent() {
-      this.refreshBtn.addEventListener("click", () => location.reload());
-      this.toggleBtn.addEventListener("click", (e) => {
-        this.isFilter = !this.isFilter;
-        localStorage.setItem("isFilter", this.isFilter);
-        e.target.firstChild.data = this.isFilter ? "点击显示" : "点击隐藏";
+      this.button__refresh.addEventListener("click", () => location.reload());
+      this.button__toggle.handleClick = () => {
+        this.isShowFavs = !this.isShowFavs;
+        bitFlags.setVal("isShowFavs", this.isShowFavs);
+        this.button__toggle.firstChild.data = this.isShowFavs
+          ? "隐藏收藏"
+          : "显示收藏";
         this.handleFilter();
+      };
+      this.button__toggle.addEventListener("click", (e) => {
+        e.target.handleClick();
+        channel?.postMessage({ type: "button__toggle" });
       });
-      this.filterBtn.addEventListener("click", () => {
-        const userInput = prompt("请输入总是过滤的收藏名：", this.alwaysFilter);
-
-        if (userInput !== null) {
-          this.alwaysFilter = userInput;
-          localStorage.setItem("alwaysFilter", this.alwaysFilter);
-          this.handleFilter();
-
-          if (!this.alwaysFilter) {
-            this.filterAllBtn.setAttribute("disabled", "");
-          } else {
-            this.filterAllBtn.removeAttribute("disabled");
-          }
-        }
+      this.button__filter.handleClick = (e) => {
+        this.isShowFilter = !this.isShowFilter;
+        bitFlags.setVal("isShowFilter", this.isShowFilter);
+        this.button__filter.firstChild.data = this.isShowFilter
+          ? "隐藏过滤"
+          : "显示过滤";
+        this.handleFilter();
+      };
+      this.button__filter.addEventListener("click", (e) => {
+        e.target.handleClick();
+        channel?.postMessage({ type: "button__filter" });
       });
-      this.filterAllBtn.addEventListener("click", async () => {
-        if (!this.alwaysFilter) {
-          return MxMessage.warning("请先设置总是过滤");
-        }
+      this.button__filterAll.addEventListener("click", async () => {
+        const alwaysFilter = localStorage.getItem("alwaysFilter");
+        const index = favoriteList.indexOf(alwaysFilter);
 
-        const index = favoriteList.indexOf(this.alwaysFilter);
         if (index === -1) {
-          return MxMessage.error("总是过滤收藏不存在");
+          return MxMessage.error(`过滤全部失败。不存在 ${alwaysFilter} 收藏`);
         }
 
         const list = Array.from(
@@ -559,12 +478,14 @@
 
         MxMessage.success("过滤全部成功");
       });
-      this.configBtn.addEventListener("click", () => configDialog?.show());
+      this.button__config.addEventListener("click", () => configDialog?.show());
 
       window.addEventListener("storage", (e) => {
-        if (e.key === "isFilter") {
-          this.isFilter = e.newValue === "true";
-          this.toggleBtn.innerText = this.isFilter ? "点击显示" : "点击隐藏";
+        if (e.key === "isShowFavs") {
+          this.isShowFavs = e.newValue === "true";
+          this.button__toggle.innerText = this.isShowFavs
+            ? "隐藏收藏"
+            : "显示收藏";
           this.handleFilter();
         }
       });
@@ -608,21 +529,21 @@
       list.forEach((n) => {
         if (n[IsFilter]) {
           this.filterCount++;
-          n.style.display = "none";
+          n.style.display = this.isShowFilter ? "" : "none";
         } else if (n[FavoriteName]) {
           this.favoriteCount++;
-          n.style.display = this.isFilter ? "none" : "";
+          n.style.display = this.isShowFavs ? "" : "none";
         } else {
           n.style.display = "";
         }
       });
 
       // 更新 count 统计数据
-      if (this.favoriteCount && this.isFilter) {
+      if (this.favoriteCount && !this.isShowFavs) {
         this.favoriteSup.value =
           this.favoriteCount > 99 ? "99+" : this.favoriteCount;
       }
-      if (this.filterCount) {
+      if (this.filterCount && !this.isShowFilter) {
         this.filterSup.value = this.filterCount > 99 ? "99+" : this.filterCount;
       }
     }
@@ -633,11 +554,11 @@
     // 详情信息缓存
     detailInfo = new Map();
     button = null;
-    detailBitFlags = Number(localStorage.getItem("test") || 0);
 
-    isShowDetail = (this.detailBitFlags & (1 << 0)) !== 0;
-    isShowDetailCount = (this.detailBitFlags & (1 << 1)) !== 0;
-    isShowDetailTags = (this.detailBitFlags & (1 << 2)) !== 0;
+    isShowDetail = bitFlags.getVal("isShowDetail");
+    isShowDetailCount = bitFlags.getVal("isShowDetailCount");
+    isShowDetailTags = bitFlags.getVal("isShowDetailTags");
+    isAlwaysFilter = bitFlags.getVal("isAlwaysFilter");
 
     constructor() {
       this.init();
@@ -652,6 +573,7 @@
     }
 
     initRender() {
+      const alwaysFilter = localStorage.getItem("alwaysFilter") || "";
       const div = document.createElement("div");
       div.dataset.type = "configDialog";
       const shadow = div.attachShadow({ mode: "open" });
@@ -661,25 +583,44 @@
             <div class="title">设置</div>
             <hr>
             <p>
-              <switch-toggle
-                ${this.isShowDetail ? "checked" : ""}
+              <mx-switch
                 class="switch__showDetail"
-              ></switch-toggle>
+                ${this.isShowDetail ? "checked" : ""}
+                state-sync="showDetail"
+              ></mx-switch>
               <span>是否显示画廊详情信息</span>
             </p>
             <p class="level2" style="display: ${this.isShowDetail ? "" : "none"}">
-              <switch-toggle
-                ${this.isShowDetailCount ? "checked" : ""}
+              <mx-switch
                 class="switch__count"
-              ></switch-toggle>
+                ${this.isShowDetailCount ? "checked" : ""}
+                state-sync="count"
+              ></mx-switch>
               <span>是否显示收藏数、评分信息</span>
             </p>
             <p class="level2" style="display: ${this.isShowDetail ? "" : "none"}">
-             <switch-toggle
-              ${this.isShowDetailTags ? "checked" : ""}
+              <mx-switch
                 class="switch__tags"
-              ></switch-toggle>
+                ${this.isShowDetailTags ? "checked" : ""}
+                state-sync="tags"
+              ></mx-switch>
               <span>是否合并关注标签（详情页更完整）</span>
+            </p>
+            
+            <p>
+              <mx-switch
+                ${this.isAlwaysFilter ? "checked" : ""}
+                class="switch__alwaysFilter"
+              ></mx-switch>
+              <span>将收藏夹设置为总是过滤</span>
+            </p>
+            <p class="level2">
+              <mx-radio-group
+                class="radio__filter"
+                value="${alwaysFilter}"
+                state-sync="alwaysFilter"
+                ${this.isAlwaysFilter ? "" : "disabled"}
+              ></mx-radio-group>
             </p>
           </div>
           
@@ -748,6 +689,12 @@
       this.switch__showDetail = shadow.querySelector(".switch__showDetail");
       this.switch__count = shadow.querySelector(".switch__count");
       this.switch__tags = shadow.querySelector(".switch__tags");
+      this.switch__alwaysFilter = shadow.querySelector(".switch__alwaysFilter");
+      this.radio__filter = shadow.querySelector(".radio__filter");
+
+      this.radio__filter.options = favoriteList
+        .filter((n) => !/^Favorites \d$/.test(n))
+        .map((n) => ({ label: n, value: n }));
 
       document.body.appendChild(div);
     }
@@ -759,10 +706,10 @@
       });
       // 是否显示画廊详情信息
       this.switch__showDetail.addEventListener("change", (event) => {
-        const { value, source } = event.detail;
-        this.isShowDetail = value;
+        this.isShowDetail = event.target.value;
+        bitFlags.setVal("isShowDetail", this.isShowDetail);
 
-        if (value) {
+        if (event.target.value) {
           this.switch__count.parentElement.style.display = "flex";
           this.switch__tags.parentElement.style.display = "flex";
         } else {
@@ -771,33 +718,51 @@
           this.switch__count.removeAttribute("checked");
           this.switch__tags.removeAttribute("checked");
         }
-
-        if (source !== "broadcast") {
-          this.updateDetailBitFlags();
-        }
       });
 
       // 是否显示收藏数、评分信息
       this.switch__count.addEventListener("change", (event) => {
-        const { value, source } = event.detail;
-        this.isShowDetailCount = value;
+        this.isShowDetailCount = event.target.value;
+        bitFlags.setVal("isShowDetailCount", this.isShowDetailCount);
 
-        this.toggleDetail(value);
-
-        if (source !== "broadcast") {
-          this.updateDetailBitFlags();
-        }
+        this.toggleDetail(event.target.value);
       });
 
       // 是否合并关注标签
       this.switch__tags.addEventListener("change", (event) => {
-        const { value, source } = event.detail;
-        this.isShowDetailTags = value;
+        this.isShowDetailTags = event.target.value;
+        bitFlags.setVal("isShowDetailTags", this.isShowDetailTags);
 
-        this.mergeTags(value);
+        this.mergeTags(event.target.value);
+      });
 
-        if (source !== "broadcast") {
-          this.updateDetailBitFlags();
+      // 是否开启总是过滤
+      this.switch__alwaysFilter.addEventListener("change", (event) => {
+        this.isAlwaysFilter = event.target.value;
+        bitFlags.setVal("isAlwaysFilter", this.isAlwaysFilter);
+
+        if (event.target.value) {
+          this.radio__filter.removeAttribute("disabled");
+        } else {
+          this.radio__filter.value = "";
+          this.radio__filter.setAttribute("disabled", "");
+        }
+      });
+
+      // 过滤设置
+      this.radio__filter.addEventListener("change", (event) => {
+        localStorage.setItem("alwaysFilter", event.target.value);
+
+        if (filterBtn) {
+          filterBtn.handleFilter();
+
+          if (!event.target.value) {
+            filterBtn.button__filter.setAttribute("disabled", "");
+            filterBtn.button__filterAll.setAttribute("disabled", "");
+          } else {
+            filterBtn.button__filter.removeAttribute("disabled");
+            filterBtn.button__filterAll.removeAttribute("disabled");
+          }
         }
       });
     }
@@ -806,34 +771,6 @@
       this.config.style.display = "block";
     }
 
-    // 更新位旗元标
-    updateDetailBitFlags() {
-      localStorage.setItem(
-        "test",
-        (
-          (this.isShowDetailTags << 2) |
-          (this.isShowDetailCount << 1) |
-          this.isShowDetail
-        ).toString(),
-      );
-
-      channel?.postMessage({
-        type: "toggleDetail",
-        data: {
-          isShowDetail: this.isShowDetail,
-          isShowDetailCount: this.isShowDetailCount,
-          isShowDetailTags: this.isShowDetailTags,
-        },
-      });
-    }
-    // 广播更新状态
-    handleChannel(data) {
-      const { isShowDetail, isShowDetailCount, isShowDetailTags } = data;
-
-      this.switch__showDetail.updateFromBroadcast(isShowDetail);
-      this.switch__count.updateFromBroadcast(isShowDetailCount);
-      this.switch__tags.updateFromBroadcast(isShowDetailTags);
-    }
     // 获取详情页信息
     async getDetailInfo(url) {
       if (this.detailInfo.has(url)) {
@@ -914,10 +851,6 @@
           div.style.outline = `3px double ${color}`;
           div.innerHTML = ehsTag_zh;
 
-          // background: radial-gradient(#00ff00,#00ff00)
-          // #00ff00
-
-          console.log(ehsTag_zh, color, div);
           return div;
         };
 
@@ -1372,11 +1305,14 @@
           // 更新过滤
           filterBtn?.handleFilter();
           break;
-        case "toggleDetail":
-          configDialog?.handleChannel(data);
-          break;
         case "getFavorites":
           favoritesBtn?.updateUlNode();
+          break;
+        case "button__toggle":
+          filterBtn?.button__toggle?.handleClick();
+          break;
+        case "button__filter":
+          filterBtn?.button__filter?.handleClick();
           break;
       }
     };

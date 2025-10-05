@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    https://greasyfork.org/zh-CN/users/1296281
-// @version      2.15.1
+// @version      2.15.2
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -1100,6 +1100,7 @@
       "Chinese",
       "chinese",
       "CHINESE",
+      "Digital",
       "中国語",
       "無修正",
       "DL版",

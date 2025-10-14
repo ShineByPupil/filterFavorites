@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    https://greasyfork.org/zh-CN/users/1296281
-// @version      2.15.2
+// @version      2.15.3
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -794,7 +794,7 @@
       const tagConfigMap = await getTags();
       // 详情标签信息
       let tagList = Array.from(doc.querySelectorAll("#taglist div[id]"))
-        .map((n) => n.id.replace("td_", ""))
+        .map((n) => n.id.replace("td_", "").replace("_", " "))
         .filter((n) => tagConfigMap.has(n));
 
       const info = { favcount, rating_count, rating_label, tagList };
@@ -842,14 +842,16 @@
         const list = getList();
         // 标签设置
         const tagConfigMap = await getTags();
-        const createTagDom = (ehsTag_zh, color) => {
+        const createTagDom = (tag, color) => {
           const div = document.createElement("div");
           div.className = "gt mergeTag";
           div.style.color = "#f1f1f1";
           div.style.borderColor = `${color}`;
           div.style.background = `${color}`;
           div.style.outline = `3px double ${color}`;
-          div.innerHTML = ehsTag_zh;
+          div.style.setProperty("margin", "0 4px 5px", "important");
+          div.title = tag;
+          div.innerHTML = tag.split(":")[1];
 
           return div;
         };
@@ -860,29 +862,77 @@
 
             if (inlineType === "e") {
               // 扩展（全量标签）
+
+              // 当前的标签
+              let currentTags = Array.from(
+                n.querySelectorAll("table td div[title]"),
+              ).map((n) => n.title);
+              // 缺失的标签
+              let missTags = tagList.filter(
+                (tag) => !currentTags.includes(tag),
+              );
+              // 缺失的标签分组
+              let missTagGroups = [
+                ...new Set(missTags.map((tag) => tag.split(":")[0])),
+              ].reverse();
+
+              // 标签分类 DOM 集合
               let contentMap = new Map(
-                Array.from(n.querySelectorAll("td:not(.tc)")).map((item) => {
-                  return [item.firstElementChild.title.split(":")[0], item];
+                Array.from(n.querySelectorAll("table tr")).map((tr) => {
+                  const [_, td] = tr.children;
+                  const type = td.firstElementChild.title.split(":")[0];
+
+                  return [type, { tr, td }];
                 }),
               );
-              let tagsNodeList = Array.from(n.querySelectorAll("table div"));
-              let currentTags = tagsNodeList.map((n) => n.title);
+              // 补充遗漏分组
+              let currentGroups = [...contentMap.keys()];
 
-              for (let tag of tagList) {
-                if (
-                  !tagConfigMap.has(tag) || // 没有配置
-                  currentTags.includes(tag) // 没有遗漏
-                )
-                  continue;
+              for (let type of missTagGroups) {
+                // 存在分类就跳过
+                if (currentGroups.includes(type)) continue;
+                // 分组顺序
+                let order = [
+                  "language",
+                  "artist",
+                  "female",
+                  "male",
+                  "mixed",
+                  "other",
+                ];
+                let index = order.indexOf(type);
+                console.log(index);
 
-                const { color, weight, ehsTag_zh } = tagConfigMap.get(tag);
-                const tagDom = createTagDom(ehsTag_zh, color);
+                for (let i = index - 1; index >= 0; i--) {
+                  if (contentMap.has(order[i])) {
+                    const tr = document.createElement("tr");
+                    const td1 = Object.assign(document.createElement("td"), {
+                      className: "tc",
+                      innerHTML: type + ":",
+                    });
+                    const td2 = document.createElement("td");
 
-                const parent = contentMap.get(tag.split(":")[0]);
+                    tr.append(td1, td2);
+
+                    contentMap.get(order[i]).tr.after(tr); // 新组插入
+                    contentMap.set(type, { tr, td: td2 });
+
+                    break;
+                  }
+                }
+              }
+
+              for (let tag of missTags) {
+                const { color, weight } = tagConfigMap.get(tag);
+                const tagDom = createTagDom(tag, color);
+                const type = tag.split(":")[0];
+
+                const { td: parent } = contentMap.get(type);
+
                 if (parent) {
                   let tagsNodeList = Array.from(parent.childNodes);
                   const refNode = tagsNodeList.find((n) => {
-                    return weight >= tagConfigMap.get(n.title).weight;
+                    return weight >= tagConfigMap.get(n.title)?.weight;
                   });
                   if (refNode) {
                     parent.insertBefore(tagDom, refNode);
@@ -894,6 +944,13 @@
             } else if (inlineType === "t" || pageType === "favorites") {
               // 缩略图（关注标签）
               let content = n.querySelector(".gl6t");
+              if (!content) {
+                content = Object.assign(document.createElement("div"), {
+                  className: "gl6t",
+                });
+                n.querySelector(".gl3t").after(content);
+              }
+
               let tagsNodeList = content ? Array.from(content.childNodes) : [];
               let currentTags = tagsNodeList.map((n) => n.title);
 
@@ -904,8 +961,8 @@
                 )
                   continue;
 
-                const { color, weight, ehsTag_zh } = tagConfigMap.get(tag);
-                const tagDom = createTagDom(ehsTag_zh, color);
+                const { color, weight } = tagConfigMap.get(tag);
+                const tagDom = createTagDom(tag, color);
 
                 const refNode = tagsNodeList.find((n) => {
                   return weight >= tagConfigMap.get(n.title).weight;

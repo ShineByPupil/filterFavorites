@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    https://greasyfork.org/zh-CN/users/1296281
-// @version      2.15.3
+// @version      2.15.4
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -1175,6 +1175,7 @@
       "图源",
       "无修正",
       "快楽天",
+      "校对",
     ];
     const parenthesesRule = "\\([^(]*(" + keyword.join("|") + ")[^(]*\\)"; // 圆括号
     const squareBracketsRule = "\\[[^[]*(" + keyword.join("|") + ")[^[]*\\]"; // 方括号
@@ -1450,6 +1451,16 @@
       await formatFileName();
       quickTagSearch();
       torrentDownload();
+
+      /* 覆盖 EhSyringe 脚本的破坏性样式 */
+      const style = document.createElement("style");
+      style.textContent = `
+        body .gm #gleft {
+          pointer-events: auto;
+        }
+      `;
+      document.head.append(style);
+
       break;
     case "favorites":
       prefetch();

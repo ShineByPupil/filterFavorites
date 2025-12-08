@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         E站功能加强
 // @namespace    https://greasyfork.org/zh-CN/users/1296281
-// @version      2.15.4
+// @version      2.16.0
 // @license      GPL-3.0
 // @description  功能：1、已收藏显隐切换 2、快速添加收藏功能 3、黑名单屏蔽重复、缺页、低质量画廊 4、详情页生成文件名 5、下一页预加载
 // @author       ShineByPupil
@@ -1218,30 +1218,53 @@
       document.querySelector("#gj").innerText ||
       document.querySelector("#gn").innerText;
 
-    title = title
-      // 统一替换全角括号为半角括号
-      .replace(/[［］（）【】]/g, (match) => {
-        if (match === "［" || match === "【") {
-          return "[";
-        } else if (match === "］" || match === "】") {
-          return "]";
-        } else if (match === "（") {
-          return "(";
-        } else if (match === "）") {
-          return ")";
+    const format = (title) =>
+      title
+        // 统一替换全角括号为半角括号
+        .replace(/[［］（）【】]/g, (match) => {
+          if (match === "［" || match === "【") {
+            return "[";
+          } else if (match === "］" || match === "】") {
+            return "]";
+          } else if (match === "（") {
+            return "(";
+          } else if (match === "）") {
+            return ")";
+          }
+        })
+        .replace(/^(\[[^\]]+])(\S)/, "$1 $2") // 开头的[xxx]后面需要有一个空格
+        .replace(/[\/\\:*?"<>|]/g, " ") // 替换文件系统非法字符为空格
+        .replace(new RegExp(parenthesesRule, "g"), "") // 自定义过滤规则移除标签
+        .replace(new RegExp(squareBracketsRule, "g"), "") // 自定义过滤规则移除标签
+        // 处理空格
+        .replace(/\(\s*/g, "(")
+        .replace(/\s*\)/g, ")")
+        .replace(/\[\s*/g, "[")
+        .replace(/\s*]/g, "]")
+        .replace(/\s+/g, " ") // 合并连续空格
+        .trim(); // 去除首尾空格
+
+    title = format(title);
+
+    if (document.querySelector("#gj").innerText) {
+      let t = document.querySelector("#gn").innerText;
+      t = format(t);
+
+      const regex =
+        /(?![\p{LC}[\p{P}--\(]\p{S}\p{N} ])(?:[[[\p{sc=Han}--丨]\p{LC}\p{So}\p{Sm}\p{Pd}\p{Po}\p{N} ]--[\(\)]]|(?:\([\p{sc=Han}\p{N}]+\))){4,}(:? ?\p{N}+)?/gv;
+      const match = t.match(regex);
+
+      // 存在中文标题
+      if (match && !title.includes(match)) {
+        let parody = title.match(/(\p{Ps}.+?\p{Pe})/gv)?.pop();
+
+        if (parody && title.endsWith(parody)) {
+          title = title.replace(parody, `丨${match[0].trim()} ${parody}`);
+        } else {
+          title += `丨${match[0].trim()}`;
         }
-      })
-      .replace(/^(\[[^\]]+])(\S)/, "$1 $2") // 开头的[xxx]后面需要有一个空格
-      .replace(/[\/\\:*?"<>|]/g, " ") // 替换文件系统非法字符为空格
-      .replace(new RegExp(parenthesesRule, "g"), "") // 自定义过滤规则移除标签
-      .replace(new RegExp(squareBracketsRule, "g"), "") // 自定义过滤规则移除标签
-      // 处理空格
-      .replace(/\(\s*/g, "(")
-      .replace(/\s*\)/g, ")")
-      .replace(/\[\s*/g, "[")
-      .replace(/\s*]/g, "]")
-      .replace(/\s+/g, " ") // 合并连续空格
-      .trim(); // 去除首尾空格
+      }
+    }
 
     // 标签设置
     const tagConfigMap = await getTags();
